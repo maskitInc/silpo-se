@@ -5,7 +5,7 @@
 node_modules/
 visual-shots/
 *.md
-# Long-lived local server — must NOT become Vercel entrypoint
+# Local long-lived server must not be the Vercel entrypoint
 server.mjs
 test.mjs
 live-*.mjs

@@ -3,8 +3,24 @@
   "framework": null,
   "installCommand": null,
   "buildCommand": null,
-  "outputDirectory": ".",
-  "cleanUrls": false,
+  "rewrites": [
+    { "source": "/auth/:path*", "destination": "/api/gateway?__path=/auth/:path*" },
+    { "source": "/api/mcp/:path*", "destination": "/api/gateway?__path=/api/mcp/:path*" },
+    { "source": "/api/cart/:path*", "destination": "/api/gateway?__path=/api/cart/:path*" },
+    { "source": "/api/history", "destination": "/api/gateway?__path=/api/history" },
+    { "source": "/api/tools", "destination": "/api/gateway?__path=/api/tools" },
+    { "source": "/api/browse", "destination": "/api/gateway?__path=/api/browse" },
+    { "source": "/api/replacements", "destination": "/api/gateway?__path=/api/replacements" },
+    { "source": "/api/resolve", "destination": "/api/gateway?__path=/api/resolve" },
+    { "source": "/api/walk-map", "destination": "/api/gateway?__path=/api/walk-map" },
+    { "source": "/api/auth/:path*", "destination": "/api/gateway?__path=/api/auth/:path*" }
+  ],
+  "functions": {
+    "api/gateway.js": {
+      "maxDuration": 60,
+      "includeFiles": "content/**"
+    }
+  },
   "headers": [
     {
       "source": "/(.*)",

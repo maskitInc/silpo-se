@@ -6,20 +6,24 @@
 
 ## Спробувати онлайн
 
-**https://silpo-se.vercel.app/** — публічне демо (фікстури).
+**https://silpo-se.vercel.app/** — публічне демо з **Live MCP** (OAuth Сільпо → cookie-сесія на Vercel).
 
-На Vercel крутиться **статика** з `prototype/` (UI + Sport/Express). Живий MCP / OAuth / «Погодити → кошик» — лише локально через `node server.mjs` (кнопка «Увійти» на демо не підключена до Silpo).
+1. Відкрий сайт → **Увійти** (або `/auth/start`)
+2. OTP Сільпо → повернення на `silpo-se.vercel.app`
+3. Express **Погодити** доливає в **твій** кошик Сільпо
 
-## Швидкий старт (локально + MCP)
+Токен гостя в **httpOnly cookie** (не в git). На Vercel потрібні env: `PUBLIC_BASE_URL`, `SILPO_COOKIE_SECRET` (див. `.env.example`). Опційний `SILPO_MCP_TOKEN` — спільний демо-акаунт (краще не ставити на публічний URL).
+
+## Швидкий старт (локально)
 
 ```bash
 cd prototype
 node server.mjs
 # → http://127.0.0.1:8766/
-# логін MCP: http://127.0.0.1:8766/auth/start
+# логін: http://127.0.0.1:8766/auth/start
 ```
 
-Опційно: `SILPO_MCP_TOKEN=…` у середовищі (див. `prototype/.env.example`). Токен лишається на сервері, не у браузері.
+Локально токен також пишеться в `.token.json` (gitignore).
 
 Регресії: `cd prototype && node test.mjs`
 
@@ -27,10 +31,12 @@ node server.mjs
 
 ```bash
 cd prototype
+npx vercel env add PUBLIC_BASE_URL production   # https://silpo-se.vercel.app
+npx vercel env add SILPO_COOKIE_SECRET production
 npx vercel --prod
 ```
 
-Конфіг: `vercel.json` + `package.json` (framework none). `server.mjs` у `.vercelignore` — інакше Vercel підхоплює його як Node entry і ламає статику. SSO protection вимкнено для публічного доступу.
+`server.mjs` у `.vercelignore` (не entrypoint). Live API: `api/gateway.js` + rewrites на `/api/*` і `/auth/*`.
 
 ## Що всередині
 
