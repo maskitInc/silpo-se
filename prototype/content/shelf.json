@@ -1,0 +1,38 @@
+{
+  "branchLabel": "Сільпо, Оболонь (фікстура, не live MCP)",
+  "sku": {
+    "яйця + хліб": { "name": "Яйця С1 10 шт", "price": 64.9, "status": "found" },
+    "готова курка з кулінарії": { "name": "Курка гриль, кулінарія", "price": 189, "status": "found" },
+    "грецький йогурт і банан": { "name": "Йогурт грецький 2%", "price": 52, "status": "found" },
+    "вівсянка": { "name": "Вівсяні пластівці 500 г", "price": 48, "status": "found" },
+    "рис і овочі": { "name": "Рис шліфований 1 кг", "price": 72, "status": "found" },
+    "готова риба з кулінарії": { "name": "Риба запечена, кулінарія", "price": 0, "status": "missing" },
+    "йогурт": { "name": "Йогурт питний", "price": 32, "status": "found", "image": "./content/fixture-thumbs/milk.svg?v=3" },
+    "овочевий салат з кулінарії": { "name": "Салат овочевий, кулінарія", "price": 79, "status": "found" },
+    "омлет і овочі": { "name": "Огірки тепличні", "price": 45, "status": "replaced", "note": "замість готового омлета" },
+    "молоко": { "name": "Молоко 2,5%", "price": 41, "status": "found", "envelope": "food", "image": "./content/fixture-thumbs/milk.svg?v=3" },
+    "хліб": { "name": "Хліб пшеничний", "price": 28, "status": "found", "envelope": "food", "image": "./content/fixture-thumbs/bread.svg?v=3" },
+    "яйця": { "name": "Яйця С1 10 шт", "price": 64.9, "status": "found", "envelope": "food", "image": "./content/fixture-thumbs/eggs.svg?v=3" },
+    "курка": { "name": "Філе куряче охолоджене", "price": 156, "status": "found", "envelope": "food", "image": "./content/fixture-thumbs/chicken.svg?v=3" },
+    "пиво": { "name": "Пиво 0,5 л", "price": 42, "status": "found", "envelope": "alcohol" },
+    "вино": { "name": "Вино тихе 0,75 л", "price": 189, "status": "found", "envelope": "alcohol" },
+    "цигарки": { "name": "Тютюнові вироби", "price": 96, "status": "found", "envelope": "tobacco" },
+    "гель для душу": { "name": "Гель для душу 400 мл", "price": 89, "status": "found", "envelope": "clean", "image": "./content/fixture-thumbs/gel.svg?v=3" },
+    "засіб для підлоги": { "name": "Засіб для підлоги 1 л", "price": 67, "status": "found", "envelope": "clean", "image": "./content/fixture-thumbs/gel.svg?v=3" },
+    "гречка": { "name": "Крупа гречана 1 кг", "price": 58, "status": "found", "envelope": "food", "image": "./content/fixture-thumbs/buckwheat.svg?v=3" },
+    "рис": { "name": "Рис шліфований 1 кг", "price": 72, "status": "found" },
+    "риба": { "name": "Риба запечена, кулінарія", "price": 0, "status": "missing" },
+    "салат": { "name": "Салат овочевий, кулінарія", "price": 79, "status": "found" },
+    "овочі": { "name": "Огірки тепличні", "price": 45, "status": "found", "image": "./content/fixture-thumbs/veg.svg?v=3" },
+    "масло": { "name": "Масло вершкове 73%", "price": 69, "status": "found", "envelope": "food", "image": "./content/fixture-thumbs/butter.svg?v=3" },
+    "зелень": { "name": "Кріп свіжий", "price": 18, "status": "found", "envelope": "food" },
+    "цибуля": { "name": "Цибуля ріпчаста", "price": 22, "status": "found", "envelope": "food" },
+    "вівсянка": { "name": "Вівсяні пластівці 500 г", "price": 48, "status": "found", "envelope": "food" }
+  },
+  "history": [
+    { "when": "2026-08-12", "lines": ["молоко", "хліб", "яйця", "пиво", "гель для душу"] },
+    { "when": "2026-08-08", "lines": ["молоко", "курка", "хліб", "цигарки"] },
+    { "when": "2026-08-03", "lines": ["яйця", "гречка", "засіб для підлоги", "пиво"] },
+    { "when": "2026-07-28", "lines": ["молоко", "хліб", "курка"] }
+  ]
+}

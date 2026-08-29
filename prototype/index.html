@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#F3EEE4" />
+    <meta name="color-scheme" content="light" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Сільпо Life" />
+    <title>СільпоSE</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600;1,700&family=Fraunces:ital,opsz,wght@0,9..144,560;0,9..144,680;1,9..144,560;1,9..144,700&family=IBM+Plex+Mono:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&family=Marck+Script&family=Pixelify+Sans:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="preconnect" href="https://images.silpo.ua" crossorigin />
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+    <link rel="stylesheet" href="./css/app.css?v=ds548" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <a class="skip" href="#app">До змісту</a>
+    <div class="phone" id="phone">
+      <main id="app" tabindex="-1">
+        <p class="kicker">Сільпо · life apps</p>
+        <h1 class="display">Що крутити. Що взяти з полиці.</h1>
+        <p class="lede">Завантаження полиці…</p>
+        <div class="skel skel--lg" aria-hidden="true"></div>
+        <div class="skel" aria-hidden="true"></div>
+        <div class="skel" aria-hidden="true"></div>
+      </main>
+      <div id="live" class="sr-only" aria-live="polite"></div>
+      <div id="toast-host"></div>
+    </div>
+    <script type="module" src="./js/app.js?v=ds548"></script>
+  </body>
+</html>

@@ -1,0 +1,47 @@
+{
+  "fetchedAt": "2026-08-19T13:27:13.847Z",
+  "cartHttp": 200,
+  "byIdHttp": 200,
+  "batchHttp": 200,
+  "contextReady": true,
+  "context": {
+    "hasShoppingCartId": true,
+    "deliveryType": "DeliveryHome",
+    "hasTimeslot": true,
+    "branchIdLen": 36
+  },
+  "cartKeys": [
+    "success",
+    "shoppingCartId"
+  ],
+  "byIdKeys": [
+    "success",
+    "cart",
+    "loyalty"
+  ],
+  "batchTopKeys": [
+    "success",
+    "summary",
+    "queries",
+    "meta"
+  ],
+  "batchIsError": false,
+  "productCount": 3,
+  "firstProductKeys": [
+    "id",
+    "name",
+    "slug",
+    "price",
+    "oldPrice",
+    "stock",
+    "available",
+    "image",
+    "weighted",
+    "step",
+    "displayRatio",
+    "specialPrices",
+    "companyId",
+    "branchId",
+    "externalProductId"
+  ]
+}

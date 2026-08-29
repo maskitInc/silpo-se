@@ -1,0 +1,69 @@
+{
+  "orders": [
+    {
+      "channel": "offline",
+      "at": "2026-08-18T17:42:00.000Z",
+      "branchLabel": "Сільпо · Київ, Хрещатик",
+      "lines": [
+        { "name": "Молоко Галичина 2,5% 900 г", "qty": 2, "price": 83.8, "image": "./content/fixture-thumbs/milk.svg?v=3" },
+        { "name": "Хліб Цар-Хліб Бородинський нарізаний 400 г", "qty": 2, "price": 99.52, "image": "./content/fixture-thumbs/bread.svg?v=3" },
+        { "name": "Яйця С1 10 шт", "qty": 1, "price": 64.9, "image": "./content/fixture-thumbs/eggs.svg?v=3" },
+        { "name": "Картопля біла мита", "qty": 2.1, "price": 83.98, "image": "./content/fixture-thumbs/veg.svg?v=3" },
+        { "name": "Цибуля ріпчаста жовта", "qty": 0.2, "price": 5.25 },
+        { "name": "Філе куряче «Епікур» охолоджене", "qty": 0.6, "price": 182.07, "image": "./content/fixture-thumbs/chicken.svg?v=3" },
+        { "name": "Гель для душу 400 мл", "qty": 1, "price": 89.0, "image": "./content/fixture-thumbs/gel.svg?v=3" }
+      ]
+    },
+    {
+      "channel": "online",
+      "at": "2026-08-12T11:15:00.000Z",
+      "branchLabel": "доставка додому",
+      "lines": [
+        { "name": "Молоко Галичина 2,5% 900 г", "qty": 1, "price": 41.9, "image": "./content/fixture-thumbs/milk.svg?v=3" },
+        { "name": "Хліб пшеничний", "qty": 1, "price": 28.0, "image": "./content/fixture-thumbs/bread.svg?v=3" },
+        { "name": "Філе куряче охолоджене", "qty": 1, "price": 156.0, "image": "./content/fixture-thumbs/chicken.svg?v=3" },
+        { "name": "Крупа гречана 1 кг", "qty": 1, "price": 58.0, "image": "./content/fixture-thumbs/buckwheat.svg?v=3" },
+        { "name": "Огірки тепличні", "qty": 0.5, "price": 45.0, "image": "./content/fixture-thumbs/veg.svg?v=3" },
+        { "name": "Пиво Оболонь світле 0.5л", "qty": 4, "price": 168.0 },
+        { "name": "Засіб для підлоги 1 л", "qty": 1, "price": 67.0, "image": "./content/fixture-thumbs/gel.svg?v=3" },
+        { "name": "Пакет Сільпо Радісного Всього", "qty": 1, "price": 3.0 }
+      ]
+    },
+    {
+      "channel": "offline",
+      "at": "2026-08-08T19:05:00.000Z",
+      "branchLabel": "Сільпо · Дніпро, Набережна",
+      "lines": [
+        { "name": "Молоко 2,5%", "qty": 2, "price": 82.0, "image": "./content/fixture-thumbs/milk.svg?v=3" },
+        { "name": "Яйця С1 10 шт", "qty": 1, "price": 64.9, "image": "./content/fixture-thumbs/eggs.svg?v=3" },
+        { "name": "Хліб Кулиничі Домашній", "qty": 1, "price": 32.5, "image": "./content/fixture-thumbs/bread.svg?v=3" },
+        { "name": "Рис шліфований 1 кг", "qty": 1, "price": 72.0 },
+        { "name": "Майонез Торчин провансаль", "qty": 1, "price": null },
+        { "name": "Олія соняшникова 0,85 л", "qty": 1, "price": 78.4 }
+      ]
+    },
+    {
+      "channel": "online",
+      "at": "2026-08-03T09:30:00.000Z",
+      "branchLabel": "самовивіз",
+      "lines": [
+        { "name": "Йогурт питний", "qty": 4, "price": 128.0, "image": "./content/fixture-thumbs/milk.svg?v=3" },
+        { "name": "Банан", "qty": 1.2, "price": 78.5, "image": "./content/fixture-thumbs/veg.svg?v=3" },
+        { "name": "Смажена шматочками риба", "qty": 0.3, "price": null },
+        { "name": "Хумус Лавка традицій", "qty": 1, "price": 87.49, "image": "./content/fixture-thumbs/butter.svg?v=3" },
+        { "name": "Гель для душу 400 мл", "qty": 1, "price": 89.0, "image": "./content/fixture-thumbs/gel.svg?v=3" }
+      ]
+    },
+    {
+      "channel": "offline",
+      "at": "2026-07-28T16:20:00.000Z",
+      "branchLabel": "Сільпо · Київ, Оболонь",
+      "lines": [
+        { "name": "Молоко Галичина 2,5% 900 г", "qty": 1, "price": 41.9, "image": "./content/fixture-thumbs/milk.svg?v=3" },
+        { "name": "Хліб пшеничний", "qty": 2, "price": 56.0, "image": "./content/fixture-thumbs/bread.svg?v=3" },
+        { "name": "Філе куряче охолоджене", "qty": 1, "price": 156.0, "image": "./content/fixture-thumbs/chicken.svg?v=3" },
+        { "name": "Картопля біла мита", "qty": 3, "price": 119.7, "image": "./content/fixture-thumbs/veg.svg?v=3" }
+      ]
+    }
+  ]
+}

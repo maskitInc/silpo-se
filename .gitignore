@@ -1,0 +1,24 @@
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+.token.json
+.oauth-client.json
+**/.token.json
+**/.oauth-client.json
+**/.env
+
+# Agent / local tooling
+.gstack/
+**/.gstack/
+.DS_Store
+**/.DS_Store
+
+# Dependencies (Playwright etc. — reinstall locally if needed)
+node_modules/
+**/node_modules/
+
+# Editor / OS
+.idea/
+.vscode/
+*.log

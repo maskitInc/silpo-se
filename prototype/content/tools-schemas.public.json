@@ -1,0 +1,1153 @@
+{
+  "fetchedAt": "2026-08-19T13:23:25.521Z",
+  "count": 39,
+  "schemas": {
+    "silpo_add_or_update_cart_products": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "shoppingCartId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "description": "Cart ID from silpo_get_my_shopping_cart"
+        },
+        "products": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "productId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "description": "Product ID from find-products or get-products"
+              },
+              "companyId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "description": "Company ID from product search response"
+              },
+              "branchId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "description": "Branch ID from product search response"
+              },
+              "quantity": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "description": "Quantity to add. For weight goods, use multiples of addToBasketStep from product data (e.g. 0.5 for 500g step)"
+              },
+              "addQuantity": {
+                "description": "Add to existing quantity (true) or replace (false)",
+                "type": "boolean"
+              },
+              "comment": {
+                "description": "Special instructions",
+                "type": "string"
+              }
+            },
+            "required": [
+              "productId",
+              "companyId",
+              "branchId",
+              "quantity"
+            ]
+          },
+          "description": "Products to add/update"
+        }
+      },
+      "required": [
+        "shoppingCartId",
+        "products"
+      ]
+    },
+    "silpo_add_or_update_certificates": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "shoppingCartId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "description": "Cart ID from silpo_get_my_shopping_cart"
+        },
+        "certificatesToAdd": {
+          "description": "Certificates to add (barcode + optional pincode)",
+          "maxItems": 10,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "barcode": {
+                "type": "string",
+                "description": "Certificate barcode"
+              },
+              "pincode": {
+                "description": "Certificate PIN (required for gift certificates)",
+                "type": "string"
+              }
+            },
+            "required": [
+              "barcode"
+            ]
+          }
+        },
+        "certificatesToRemove": {
+          "description": "Certificates to remove (barcode from silpo_get_shopping_cart_by_id certificates)",
+          "maxItems": 10,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "barcode": {
+                "type": "string",
+                "description": "Certificate barcode"
+              },
+              "pincode": {
+                "description": "Certificate PIN (required for gift certificates)",
+                "type": "string"
+              }
+            },
+            "required": [
+              "barcode"
+            ]
+          }
+        }
+      },
+      "required": [
+        "shoppingCartId"
+      ]
+    },
+    "silpo_add_or_update_favorite_products": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "actions": {
+          "minItems": 1,
+          "maxItems": 5,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "productId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "description": "Product id field from any product-returning tool"
+              },
+              "externalProductId": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "externalProductId field from any product-returning tool"
+              },
+              "toDelete": {
+                "type": "boolean",
+                "description": "true to remove from favorites, false to add"
+              }
+            },
+            "required": [
+              "productId",
+              "externalProductId",
+              "toDelete"
+            ]
+          },
+          "description": "List of add/remove actions (max 5)"
+        }
+      },
+      "required": [
+        "actions"
+      ]
+    },
+    "silpo_clear_shopping_cart": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "shoppingCartId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "description": "Cart ID from silpo_get_my_shopping_cart"
+        }
+      },
+      "required": [
+        "shoppingCartId"
+      ]
+    },
+    "silpo_find_address": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Address search text (e.g., \"Київ, вулиця Хрещатик, 1\")"
+        }
+      },
+      "required": [
+        "address"
+      ]
+    },
+    "silpo_find_nova_poshta_offices": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "settlementId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "description": "Settlement ID from silpo_find_nova_poshta_settlements"
+        },
+        "title": {
+          "description": "Filter by office number or address text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "settlementId"
+      ]
+    },
+    "silpo_find_nova_poshta_settlements": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "City name to search for (e.g. \"Київ\", \"Одеса\")"
+        }
+      },
+      "required": [
+        "title"
+      ]
+    },
+    "silpo_find_products_batch": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "branchId": {
+          "type": "string",
+          "description": "Branch ID from silpo_get_shopping_cart_by_id or silpo_get_available_delivery_types"
+        },
+        "deliveryType": {
+          "type": "string",
+          "enum": [
+            "Unknown",
+            "SelfPickup",
+            "DeliveryHome",
+            "DeliveryFlat",
+            "DeliveryOffice",
+            "DeliveryGlovo",
+            "DeliveryExpress",
+            "DeliveryExpressFood",
+            "JustIn",
+            "LongDelivery",
+            "JustInPost",
+            "NovaPoshta",
+            "DeliveryExpressByPromise",
+            "WideAssortDelivery"
+          ],
+          "description": "Delivery type"
+        },
+        "timeslotStart": {
+          "type": "string",
+          "description": "Timeslot start"
+        },
+        "timeslotEnd": {
+          "type": "string",
+          "description": "Timeslot end"
+        },
+        "products": {
+          "maxItems": 30,
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Array of product names to search for (max 30)"
+        },
+        "limit": {
+          "description": "Results per search (default: 30)",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      },
+      "required": [
+        "branchId",
+        "deliveryType",
+        "timeslotStart",
+        "timeslotEnd",
+        "products"
+      ]
+    },
+    "silpo_get_available_delivery_types": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "latitude": {
+          "type": "number",
+          "description": "Latitude coordinate"
+        },
+        "longitude": {
+          "type": "number",
+          "description": "Longitude coordinate"
+        }
+      },
+      "required": [
+        "latitude",
+        "longitude"
+      ]
+    },
+    "silpo_get_categories": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "branchId": {
+          "type": "string",
+          "description": "Branch ID from silpo_get_shopping_cart_by_id or silpo_get_available_delivery_types"
+        },
+        "parentId": {
+          "description": "Parent category ID to get subcategories",
+          "type": "string"
+        },
+        "limit": {
+          "description": "Max categories (default: 1000)",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "offset": {
+          "description": "Skip for pagination",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "branchId"
+      ]
+    },
+    "silpo_get_categories_tree": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "branchId": {
+          "type": "string",
+          "description": "Branch ID from silpo_get_shopping_cart_by_id"
+        },
+        "deliveryType": {
+          "type": "string",
+          "enum": [
+            "Unknown",
+            "SelfPickup",
+            "DeliveryHome",
+            "DeliveryFlat",
+            "DeliveryOffice",
+            "DeliveryGlovo",
+            "DeliveryExpress",
+            "DeliveryExpressFood",
+            "JustIn",
+            "LongDelivery",
+            "JustInPost",
+            "NovaPoshta",
+            "DeliveryExpressByPromise",
+            "WideAssortDelivery"
+          ],
+          "description": "Delivery type from silpo_get_shopping_cart_by_id"
+        },
+        "timeslotStart": {
+          "type": "string",
+          "description": "Timeslot start from silpo_get_shopping_cart_by_id"
+        },
+        "timeslotEnd": {
+          "type": "string",
+          "description": "Timeslot end from silpo_get_shopping_cart_by_id"
+        }
+      },
+      "required": [
+        "branchId",
+        "deliveryType",
+        "timeslotStart",
+        "timeslotEnd"
+      ]
+    },
+    "silpo_get_category": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "branchId": {
+          "type": "string",
+          "description": "Branch ID from silpo_get_shopping_cart_by_id or silpo_get_available_delivery_types"
+        },
+        "deliveryType": {
+          "type": "string",
+          "enum": [
+            "Unknown",
+            "SelfPickup",
+            "DeliveryHome",
+            "DeliveryFlat",
+            "DeliveryOffice",
+            "DeliveryGlovo",
+            "DeliveryExpress",
+            "DeliveryExpressFood",
+            "JustIn",
+            "LongDelivery",
+            "JustInPost",
+            "NovaPoshta",
+            "DeliveryExpressByPromise",
+            "WideAssortDelivery"
+          ],
+          "description": "Delivery type"
+        },
+        "categorySlug": {
+          "type": "string",
+          "description": "Category slug from silpo_get_popular_categories or silpo_get_categories_tree"
+        }
+      },
+      "required": [
+        "branchId",
+        "deliveryType",
+        "categorySlug"
+      ]
+    },
+    "silpo_get_coupon_details": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "businessCouponId": {
+          "type": "number",
+          "description": "Coupon ID from silpo_get_my_coupons"
+        }
+      },
+      "required": [
+        "businessCouponId"
+      ]
+    },
+    "silpo_get_loyalty_info": {
+      "type": "object",
+      "properties": {}
+    },
+    "silpo_get_my_certificates": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "limit": {
+          "description": "Max certificates to return (default: 50)",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "offset": {
+          "description": "Pagination offset (default: 0)",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      }
+    },
+    "silpo_get_my_coupons": {
+      "type": "object",
+      "properties": {}
+    },
+    "silpo_get_my_delivery_addresses": {
+      "type": "object",
+      "properties": {}
+    },
+    "silpo_get_my_family": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {}
+    },
+    "silpo_get_my_favorites": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "branchId": {
+          "type": "string",
+          "description": "Branch ID from silpo_get_shopping_cart_by_id"
+        },
+        "deliveryType": {
+          "type": "string",
+          "enum": [
+            "Unknown",
+            "SelfPickup",
+            "DeliveryHome",
+            "DeliveryFlat",
+            "DeliveryOffice",
+            "DeliveryGlovo",
+            "DeliveryExpress",
+            "DeliveryExpressFood",
+            "JustIn",
+            "LongDelivery",
+            "JustInPost",
+            "NovaPoshta",
+            "DeliveryExpressByPromise",
+            "WideAssortDelivery"
+          ],
+          "description": "Delivery type from silpo_get_shopping_cart_by_id"
+        },
+        "timeslotStart": {
+          "type": "string",
+          "description": "Timeslot start ISO timestamp from silpo_get_shopping_cart_by_id slot.start"
+        },
+        "limit": {
+          "description": "Max results (default: 25)",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500
+        },
+        "offset": {
+          "description": "Pagination offset (default: 0)",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "branchId",
+        "deliveryType",
+        "timeslotStart"
+      ]
+    },
+    "silpo_get_my_food_restrictions": {
+      "type": "object",
+      "properties": {}
+    },
+    "silpo_get_my_offline_orders": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "branchId": {
+          "type": "string",
+          "description": "Branch ID from silpo_get_shopping_cart_by_id"
+        },
+        "deliveryType": {
+          "type": "string",
+          "description": "Delivery type from silpo_get_shopping_cart_by_id"
+        },
+        "timeslotStart": {
+          "type": "string",
+          "description": "Timeslot start from silpo_get_shopping_cart_by_id"
+        },
+        "timeslotEnd": {
+          "type": "string",
+          "description": "Timeslot end from silpo_get_shopping_cart_by_id"
+        },
+        "limit": {
+          "description": "Max orders to return (default: 10, max: 10)",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "offset": {
+          "description": "Skip for pagination (default: 0)",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "dateStart": {
+          "description": "Period start in ISO format (default: 6 months ago)",
+          "type": "string"
+        },
+        "dateEnd": {
+          "description": "Period end in ISO format (default: now)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "branchId",
+        "deliveryType",
+        "timeslotStart",
+        "timeslotEnd"
+      ]
+    },
+    "silpo_get_my_online_orders": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "limit": {
+          "description": "Max orders (default: 10)",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "offset": {
+          "description": "Skip for pagination",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      }
+    },
+    "silpo_get_my_premium_subscription": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {}
+    },
+    "silpo_get_my_profile": {
+      "type": "object",
+      "properties": {}
+    },
+    "silpo_get_my_promos": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {}
+    },
+    "silpo_get_my_shopping_cart": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {}
+    },
+    "silpo_get_popular_categories": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "branchId": {
+          "type": "string",
+          "description": "Branch ID from silpo_get_shopping_cart_by_id or silpo_get_available_delivery_types"
+        },
+        "deliveryType": {
+          "type": "string",
+          "enum": [
+            "Unknown",
+            "SelfPickup",
+            "DeliveryHome",
+            "DeliveryFlat",
+            "DeliveryOffice",
+            "DeliveryGlovo",
+            "DeliveryExpress",
+            "DeliveryExpressFood",
+            "JustIn",
+            "LongDelivery",
+            "JustInPost",
+            "NovaPoshta",
+            "DeliveryExpressByPromise",
+            "WideAssortDelivery"
+          ],
+          "description": "Delivery type"
+        }
+      },
+      "required": [
+        "branchId",
+        "deliveryType"
+      ]
+    },
+    "silpo_get_product_details": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "branchId": {
+          "type": "string",
+          "description": "Branch ID from silpo_get_shopping_cart_by_id"
+        },
+        "slug": {
+          "type": "string",
+          "description": "Product slug — MUST be taken from slug field in silpo_find_products_batch or silpo_get_products results. Never construct from name."
+        },
+        "deliveryType": {
+          "type": "string",
+          "description": "Delivery type from silpo_get_shopping_cart_by_id"
+        },
+        "timeslotStart": {
+          "type": "string",
+          "description": "Timeslot start from silpo_get_shopping_cart_by_id"
+        },
+        "timeslotEnd": {
+          "type": "string",
+          "description": "Timeslot end from silpo_get_shopping_cart_by_id"
+        }
+      },
+      "required": [
+        "branchId",
+        "slug",
+        "deliveryType",
+        "timeslotStart",
+        "timeslotEnd"
+      ]
+    },
+    "silpo_get_product_sets": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "branchId": {
+          "type": "string",
+          "description": "Branch ID from silpo_get_shopping_cart_by_id or silpo_get_available_delivery_types"
+        },
+        "deliveryType": {
+          "description": "Filter by delivery type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "branchId"
+      ]
+    },
+    "silpo_get_products": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "branchId": {
+          "type": "string",
+          "description": "Branch ID from silpo_get_shopping_cart_by_id or silpo_get_available_delivery_types"
+        },
+        "deliveryType": {
+          "type": "string",
+          "enum": [
+            "Unknown",
+            "SelfPickup",
+            "DeliveryHome",
+            "DeliveryFlat",
+            "DeliveryOffice",
+            "DeliveryGlovo",
+            "DeliveryExpress",
+            "DeliveryExpressFood",
+            "JustIn",
+            "LongDelivery",
+            "JustInPost",
+            "NovaPoshta",
+            "DeliveryExpressByPromise",
+            "WideAssortDelivery"
+          ],
+          "description": "Delivery type"
+        },
+        "timeslotStart": {
+          "type": "string",
+          "description": "Timeslot start"
+        },
+        "timeslotEnd": {
+          "type": "string",
+          "description": "Timeslot end"
+        },
+        "mustHavePromotion": {
+          "description": "Only show promotional products",
+          "type": "boolean"
+        },
+        "category": {
+          "description": "Category filter",
+          "type": "string"
+        },
+        "promotionCode": {
+          "description": "Promotion code from silpo_get_promotions",
+          "type": "string"
+        },
+        "inStock": {
+          "description": "Only show in-stock products",
+          "type": "boolean"
+        },
+        "set": {
+          "description": "Set slug from silpo_get_product_sets to browse products in that set",
+          "type": "string"
+        },
+        "limit": {
+          "description": "Max results (default: 25)",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "offset": {
+          "description": "Skip items for pagination",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "sortBy": {
+          "description": "Sort field (default: popularity)",
+          "type": "string",
+          "enum": [
+            "popularity",
+            "score",
+            "title",
+            "price",
+            "promotion",
+            "productsList",
+            "slugsList",
+            "guestRating",
+            "carouselList"
+          ]
+        },
+        "sortDirection": {
+          "description": "Sort direction",
+          "type": "string",
+          "enum": [
+            "asc",
+            "desc"
+          ]
+        },
+        "fromPrice": {
+          "description": "Min price",
+          "type": "number"
+        },
+        "toPrice": {
+          "description": "Max price",
+          "type": "number"
+        }
+      },
+      "required": [
+        "branchId",
+        "deliveryType",
+        "timeslotStart",
+        "timeslotEnd"
+      ]
+    },
+    "silpo_get_promo_codes": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {}
+    },
+    "silpo_get_promotions": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "branchId": {
+          "type": "string",
+          "description": "Branch ID from silpo_get_shopping_cart_by_id"
+        },
+        "deliveryType": {
+          "type": "string",
+          "enum": [
+            "Unknown",
+            "SelfPickup",
+            "DeliveryHome",
+            "DeliveryFlat",
+            "DeliveryOffice",
+            "DeliveryGlovo",
+            "DeliveryExpress",
+            "DeliveryExpressFood",
+            "JustIn",
+            "LongDelivery",
+            "JustInPost",
+            "NovaPoshta",
+            "DeliveryExpressByPromise",
+            "WideAssortDelivery"
+          ],
+          "description": "Delivery type from silpo_get_shopping_cart_by_id"
+        },
+        "timeslotStart": {
+          "type": "string",
+          "description": "Timeslot start ISO timestamp from silpo_get_shopping_cart_by_id slot.start"
+        },
+        "timeslotEnd": {
+          "type": "string",
+          "description": "Timeslot end ISO timestamp from silpo_get_shopping_cart_by_id slot.end"
+        }
+      },
+      "required": [
+        "branchId",
+        "deliveryType",
+        "timeslotStart",
+        "timeslotEnd"
+      ]
+    },
+    "silpo_get_replacements": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "branchId": {
+          "type": "string",
+          "description": "Branch ID from silpo_get_shopping_cart_by_id"
+        },
+        "companyId": {
+          "type": "string",
+          "description": "Company ID"
+        },
+        "productIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Product IDs to find replacements for"
+        },
+        "deliveryType": {
+          "type": "string",
+          "description": "Delivery type from silpo_get_shopping_cart_by_id"
+        }
+      },
+      "required": [
+        "branchId",
+        "companyId",
+        "productIds",
+        "deliveryType"
+      ]
+    },
+    "silpo_get_shopping_cart_by_id": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "shoppingCartId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "description": "Cart ID from silpo_get_my_shopping_cart"
+        }
+      },
+      "required": [
+        "shoppingCartId"
+      ]
+    },
+    "silpo_get_similar_products": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "branchId": {
+          "type": "string",
+          "description": "Branch ID from silpo_get_shopping_cart_by_id"
+        },
+        "slug": {
+          "type": "string",
+          "description": "Product slug"
+        },
+        "limit": {
+          "description": "Max results",
+          "type": "number"
+        },
+        "offset": {
+          "description": "Offset for pagination",
+          "type": "number"
+        },
+        "deliveryType": {
+          "description": "Delivery type from silpo_get_shopping_cart_by_id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "branchId",
+        "slug"
+      ]
+    },
+    "silpo_get_time_slots": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "branchId": {
+          "type": "string",
+          "description": "Branch ID from silpo_get_shopping_cart_by_id or silpo_get_available_delivery_types"
+        },
+        "deliveryTypes": {
+          "description": "Filter by delivery types",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "NovaPoshta",
+              "JustInPost",
+              "LongDelivery",
+              "JustIn",
+              "DeliveryExpressFood",
+              "DeliveryExpress",
+              "DeliveryGlovo",
+              "DeliveryOffice",
+              "DeliveryFlat",
+              "DeliveryHome",
+              "SelfPickup",
+              "WideAssortDelivery"
+            ]
+          }
+        },
+        "limit": {
+          "description": "Max slots to return (default: 25)",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "start": {
+          "description": "Start date-time in ISO format",
+          "type": "string"
+        },
+        "end": {
+          "description": "End date-time in ISO format",
+          "type": "string"
+        }
+      },
+      "required": [
+        "branchId"
+      ]
+    },
+    "silpo_list_branches": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "limit": {
+          "description": "Max results to return (default: 50)",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "offset": {
+          "description": "Offset for pagination",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "hasPickup": {
+          "description": "Filter branches that support self-pickup",
+          "type": "boolean"
+        },
+        "hasNP": {
+          "description": "Filter branches that support Nova Poshta delivery",
+          "type": "boolean"
+        }
+      }
+    },
+    "silpo_remove_cart_products": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "shoppingCartId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "description": "Cart ID from silpo_get_my_shopping_cart"
+        },
+        "products": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "productId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "description": "Product ID from cart"
+              }
+            },
+            "required": [
+              "productId"
+            ]
+          },
+          "description": "Products to remove"
+        }
+      },
+      "required": [
+        "shoppingCartId",
+        "products"
+      ]
+    },
+    "silpo_update_shopping_cart": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "shoppingCartId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "description": "Cart ID from silpo_get_my_shopping_cart"
+        },
+        "deliveryType": {
+          "type": "string",
+          "description": "Delivery type"
+        },
+        "timeslot": {
+          "type": "object",
+          "properties": {
+            "start": {
+              "type": "string",
+              "description": "Start time ISO format"
+            },
+            "end": {
+              "type": "string",
+              "description": "End time ISO format"
+            }
+          },
+          "required": [
+            "start",
+            "end"
+          ],
+          "description": "Delivery timeslot"
+        },
+        "address": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {},
+          "description": "Full address object from silpo_get_shopping_cart_by_id response (must include addressType, latitude, longitude)"
+        },
+        "shipments": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "companyId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "description": "Company ID from cart shipment"
+              },
+              "branchId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "description": "Branch ID from cart shipment"
+              }
+            },
+            "required": [
+              "companyId",
+              "branchId"
+            ]
+          },
+          "description": "Shipments array from silpo_get_shopping_cart_by_id response (do NOT construct manually)"
+        },
+        "branchId": {
+          "description": "New branch ID (optional)",
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "feedbackChanges": {
+          "description": "Product change preference",
+          "type": "string",
+          "enum": [
+            "approvedChanges",
+            "disapprovedChanges"
+          ]
+        },
+        "feedbackContacts": {
+          "description": "Contact preference",
+          "type": "string",
+          "enum": [
+            "call",
+            "doNotCall"
+          ]
+        },
+        "isAdultConfirmed": {
+          "description": "Confirm adult products",
+          "type": "boolean"
+        },
+        "promoCode": {
+          "description": "Promo code to apply",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bonusRequested": {
+          "description": "Балабонуси to apply: set to bonusAvailable (or less if user specifies an exact amount) from silpo_get_shopping_cart_by_id to pay with bonuses, or null to remove bonus payment",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "shoppingCartId",
+        "deliveryType",
+        "timeslot",
+        "address",
+        "shipments"
+      ]
+    }
+  }
+}

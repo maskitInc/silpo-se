@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design system — Сільпо Life</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,680&family=Manrope:wght@400;600;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./css/app.css?v=ds2" />
+    <style>
+      body { background: oklch(0.88 0.02 90); }
+      .board { max-width: 720px; margin: 0 auto; padding: 32px 16px 80px; }
+      .swatch { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 16px 0 32px; }
+      .swatch b { display: block; height: 56px; border-radius: 12px; }
+      .swatch span { font-size: 12px; color: var(--muted); }
+    </style>
+  </head>
+  <body>
+    <div class="board">
+      <p class="kicker">Сільпо Life · DESIGN.md</p>
+      <h1 class="display">Quiet grocery OS</h1>
+      <p class="lede">Fraunces + Manrope. Paper, leaf, one CTA. Токени в css/app.css.</p>
+      <div class="swatch">
+        <div><b style="background:var(--bg)"></b><span>--bg</span></div>
+        <div><b style="background:var(--elev)"></b><span>--elev</span></div>
+        <div><b style="background:var(--leaf)"></b><span>--leaf</span></div>
+        <div><b style="background:var(--ink)"></b><span>--ink</span></div>
+      </div>
+      <div class="card">
+        <strong>Компоненти</strong>
+        <p class="muted">Кнопка, чіп, статус, рядок.</p>
+        <button type="button" class="primary">Друкувати обране · так</button>
+        <button type="button" class="ghost">скасувати</button>
+        <div class="chips"><button type="button" class="on">тиждень</button><button type="button">місяць</button></div>
+        <p><span class="status found">є</span> <span class="status missing">немає</span> <span class="status replaced">заміна</span></p>
+      </div>
+      <p class="muted"><a href="./">← додаток</a></p>
+    </div>
+  </body>
+</html>

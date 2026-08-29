@@ -1,0 +1,232 @@
+{
+  "programs": [
+    { "id": "chair-yoga", "title": "Йога на стільці", "goal": "mobility", "place": "home" },
+    { "id": "asian-walk", "title": "Спокійна ходьба", "goal": "cardio", "place": "outdoor" },
+    { "id": "tai-chi", "title": "Тайцзі", "goal": "mobility", "place": "home" },
+    { "id": "afrobeat", "title": "Афробіт", "goal": "cardio", "place": "home" },
+    { "id": "military", "title": "Військові тренування", "goal": "strength", "place": "home" },
+    { "id": "calisthenics", "title": "Калистеніка", "goal": "strength", "place": "home" },
+    { "id": "tai-chi-walk", "title": "Ходьба тайцзі", "goal": "cardio", "place": "outdoor" },
+    { "id": "stretch", "title": "Розтяжка", "goal": "mobility", "place": "home" },
+    { "id": "core-mobility", "title": "Мобільність кора", "goal": "mobility", "place": "home" }
+  ],
+  "sessions": {
+    "military": {
+      "beginner": ["Планка 20 с × 3", "Присідання 10 × 3", "Віджимання з колін 6 × 3", "Випади 8 на ногу", "Дихання 1 хв"],
+      "beginner_female": ["Планка 15 с × 2", "Присідання 8 × 2", "Віджимання з колін 4 × 2", "Випади 6 на ногу", "Дихання 1 хв"],
+      "intermediate": ["Планка 40 с × 3", "Присідання 15 × 4", "Віджимання 10 × 3", "Берпі 6 × 3"]
+    },
+    "stretch": {
+      "beginner": ["Шия повільно 8 разів", "Кішка-корова 10", "Нахил до ніг 30 с", "Скрутка лежачи 20 с на бік", "Дитина 45 с"],
+      "beginner_female": ["Шия повільно 6 разів", "Кішка-корова 8", "Нахил до ніг 20 с", "Скрутка лежачи 15 с на бік", "Дитина 30 с"]
+    },
+    "calisthenics": {
+      "beginner": ["Віджимання з колін 8 × 3", "Присідання 12 × 3", "Супермен 20 с × 3"],
+      "beginner_female": ["Віджимання з колін 6 × 2", "Присідання 8 × 2", "Супермен 15 с × 2"]
+    },
+    "tai-chi": {
+      "beginner": ["Стійка вершника 30 с", "Хвиля руками 8", "Перенесення ваги 10"],
+      "beginner_female": ["Стійка вершника 20 с", "Хвиля руками 6", "Перенесення ваги 8"]
+    },
+    "afrobeat": {
+      "beginner": ["Крок на місці 2 хв", "Плечі 32 рахунки", "Стегна 32 рахунки"],
+      "beginner_female": ["Крок на місці 1 хв", "Плечі 24 рахунки", "Стегна 24 рахунки"]
+    },
+    "chair-yoga": {
+      "beginner": ["Сидячи: підйом коліна 8", "Скрутка на стільці 20 с", "Плечі назад 10"],
+      "beginner_female": ["Сидячи: підйом коліна 6", "Скрутка на стільці 15 с", "Плечі назад 8"]
+    },
+    "asian-walk": { "beginner": ["Ходьба 12 хв рівним кроком", "Зупинка розтягнути литки 30 с"] },
+    "tai-chi-walk": { "beginner": ["Повільна ходьба 10 хв", "Пауза тайцзі 1 хв кожні 3 хв"] },
+    "core-mobility": {
+      "beginner": ["Кішка-корова 10", "Мертва комаха 6 на бік", "Дихання животом 1 хв"],
+      "beginner_female": ["Кішка-корова 8", "Мертва комаха 4 на бік", "Дихання животом 1 хв"]
+    }
+  },
+  "catalog": [
+    { "id": "stretch", "title": "Розтяжка", "count": 19, "tone": "#c8e6c4" },
+    { "id": "military", "title": "Верх тіла", "count": 28, "tone": "#b3e5fc", "aliasProgram": "military" },
+    { "id": "calisthenics", "title": "Усе тіло", "count": 26, "tone": "#f8bbd0" },
+    { "id": "asian-walk", "title": "Ноги і сідниці", "count": 26, "tone": "#b3e5fc" },
+    { "id": "afrobeat", "title": "Кардіо", "count": 25, "tone": "#ffcc80" },
+    { "id": "core-mobility", "title": "Мобільність", "count": 12, "tone": "#d1c4e9" }
+  ],
+  "mealMaps": {
+    "strength": {
+      "breakfast": { "title": "Яєчня", "staples": ["яйця", "масло"], "cook": "cook" },
+      "lunch": { "title": "Курка з гречкою й овочами", "staples": ["курка", "гречка", "овочі"], "cook": "cook" },
+      "dinner": { "title": "Йогурт на вечір", "staples": ["йогурт"], "cook": "ready" },
+      "byBodyGoal": {
+        "gain": {
+          "dinner": { "title": "Риба з салатом", "staples": ["риба", "салат"], "cook": "cook" }
+        },
+        "lose": {
+          "lunch": { "title": "Рис з овочами", "staples": ["рис", "овочі"], "cook": "cook" }
+        }
+      },
+      "byCookMode": {
+        "ready": {
+          "breakfast": { "title": "Йогурт з кулінарії", "staples": ["йогурт"], "cook": "ready" },
+          "lunch": { "title": "Курка гриль · кулінарія", "staples": ["готова курка з кулінарії"], "cook": "ready" },
+          "dinner": { "title": "Салат овочевий · кулінарія", "staples": ["овочевий салат з кулінарії"], "cook": "ready" }
+        }
+      },
+      "course": [
+        {
+          "breakfast": { "title": "Яєчня" },
+          "lunch": { "title": "Курка з гречкою й овочами" },
+          "dinner": { "title": "Йогурт на вечір" }
+        },
+        {
+          "breakfast": { "title": "Омлет" },
+          "lunch": { "title": "Курка з гречкою" },
+          "dinner": { "title": "Йогурт" }
+        },
+        {
+          "breakfast": { "title": "Скрамбл" },
+          "lunch": { "title": "Курка й овочі" },
+          "dinner": { "title": "Йогурт з ягодами" }
+        },
+        {
+          "breakfast": { "title": "Яєчня з тостом" },
+          "lunch": { "title": "Гречка з куркою" },
+          "dinner": { "title": "Йогурт на вечір" }
+        },
+        {
+          "breakfast": { "title": "Омлет на маслі" },
+          "lunch": { "title": "Курка з овочами" },
+          "dinner": { "title": "Йогурт" }
+        },
+        {
+          "breakfast": { "title": "Скрамбл" },
+          "lunch": { "title": "Курка з гречкою й овочами" },
+          "dinner": { "title": "Йогурт" }
+        },
+        {
+          "breakfast": { "title": "Яєчня" },
+          "lunch": { "title": "Гречка з овочами й куркою" },
+          "dinner": { "title": "Йогурт на вечір" }
+        }
+      ]
+    },
+    "cardio": {
+      "breakfast": { "title": "Вівсянка на молоці", "staples": ["вівсянка", "молоко"], "cook": "cook" },
+      "lunch": { "title": "Рис з овочами", "staples": ["рис", "овочі"], "cook": "cook" },
+      "dinner": { "title": "Риба з салатом", "staples": ["риба", "салат"], "cook": "cook" },
+      "byBodyGoal": {
+        "lose": {
+          "dinner": { "title": "Йогурт на вечір", "staples": ["йогурт"], "cook": "ready" }
+        },
+        "gain": {
+          "lunch": { "title": "Курка з гречкою й овочами", "staples": ["курка", "гречка", "овочі"], "cook": "cook" }
+        }
+      },
+      "byCookMode": {
+        "ready": {
+          "breakfast": { "title": "Йогурт з кулінарії", "staples": ["йогурт"], "cook": "ready" },
+          "lunch": { "title": "Курка гриль · кулінарія", "staples": ["готова курка з кулінарії"], "cook": "ready" },
+          "dinner": { "title": "Салат овочевий · кулінарія", "staples": ["овочевий салат з кулінарії"], "cook": "ready" }
+        }
+      },
+      "course": [
+        {
+          "breakfast": { "title": "Вівсянка на молоці" },
+          "lunch": { "title": "Рис з овочами" },
+          "dinner": { "title": "Риба з салатом" }
+        },
+        {
+          "breakfast": { "title": "Вівсянка" },
+          "lunch": { "title": "Рис і овочі" },
+          "dinner": { "title": "Риба на вечір" }
+        },
+        {
+          "breakfast": { "title": "Каша вівсяна" },
+          "lunch": { "title": "Овочі з рисом" },
+          "dinner": { "title": "Салат з рибою" }
+        },
+        {
+          "breakfast": { "title": "Вівсянка на молоці" },
+          "lunch": { "title": "Рис з овочами" },
+          "dinner": { "title": "Риба з салатом" }
+        },
+        {
+          "breakfast": { "title": "Вівсянка" },
+          "lunch": { "title": "Рис і овочі" },
+          "dinner": { "title": "Риба" }
+        },
+        {
+          "breakfast": { "title": "Каша вівсяна" },
+          "lunch": { "title": "Рис з овочами" },
+          "dinner": { "title": "Риба з салатом" }
+        },
+        {
+          "breakfast": { "title": "Вівсянка на молоці" },
+          "lunch": { "title": "Овочі з рисом" },
+          "dinner": { "title": "Риба на вечір" }
+        }
+      ]
+    },
+    "mobility": {
+      "breakfast": { "title": "Йогурт", "staples": ["йогурт"], "cook": "ready" },
+      "lunch": { "title": "Зелений салат", "staples": ["салат", "зелень"], "cook": "ready" },
+      "dinner": { "title": "Овочі на пару", "staples": ["овочі", "цибуля"], "cook": "cook" },
+      "byBodyGoal": {
+        "maintain": {
+          "lunch": { "title": "Рис з овочами", "staples": ["рис", "овочі"], "cook": "cook" }
+        },
+        "gain": {
+          "dinner": { "title": "Риба з салатом", "staples": ["риба", "салат"], "cook": "cook" }
+        }
+      },
+      "byCookMode": {
+        "ready": {
+          "breakfast": { "title": "Йогурт з кулінарії", "staples": ["йогурт"], "cook": "ready" },
+          "lunch": { "title": "Курка гриль · кулінарія", "staples": ["готова курка з кулінарії"], "cook": "ready" },
+          "dinner": { "title": "Салат овочевий · кулінарія", "staples": ["овочевий салат з кулінарії"], "cook": "ready" }
+        }
+      },
+      "course": [
+        {
+          "breakfast": { "title": "Йогурт" },
+          "lunch": { "title": "Зелений салат" },
+          "dinner": { "title": "Овочі на пару" }
+        },
+        {
+          "breakfast": { "title": "Йогурт з ягодами" },
+          "lunch": { "title": "Салат зі зеленню" },
+          "dinner": { "title": "Пара овочів" }
+        },
+        {
+          "breakfast": { "title": "Йогурт" },
+          "lunch": { "title": "Легкий салат" },
+          "dinner": { "title": "Овочі на пару" }
+        },
+        {
+          "breakfast": { "title": "Йогурт на ранок" },
+          "lunch": { "title": "Зелений салат" },
+          "dinner": { "title": "Овочі з цибулею" }
+        },
+        {
+          "breakfast": { "title": "Йогурт з ягодами" },
+          "lunch": { "title": "Салат зі зеленню" },
+          "dinner": { "title": "Овочі на пару" }
+        },
+        {
+          "breakfast": { "title": "Йогурт" },
+          "lunch": { "title": "Легкий салат" },
+          "dinner": { "title": "Пара овочів" }
+        },
+        {
+          "breakfast": { "title": "Йогурт на ранок" },
+          "lunch": { "title": "Зелений салат" },
+          "dinner": { "title": "Овочі на пару" }
+        }
+      ]
+    }
+  },
+  "mealMapNotes": {
+    "strength": "білок після сили · курс тижня · ті самі staples",
+    "cardio": "повільне паливо · курс тижня · ті самі staples",
+    "mobility": "легко · курс тижня · ті самі staples"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "id": "fixture_chef_demo",
+  "kind": "chef",
+  "title": "Демо-шеф",
+  "attribution": "Демо-контент шефа · не партнер Сільпо · локальна фікстура",
+  "mealMaps": {
+    "strength": {
+      "breakfast": { "title": "Омлет шефа", "staples": ["яйця", "зелень"], "cook": "cook" },
+      "lunch": { "title": "Гречка з овочами", "staples": ["гречка", "овочі"], "cook": "cook" },
+      "dinner": { "title": "Йогурт на вечір", "staples": ["йогурт"], "cook": "ready" }
+    }
+  },
+  "mealMapNotes": {
+    "strength": "демо шеф · обід без курки (фікстура, не дієтолог)"
+  }
+}
