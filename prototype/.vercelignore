@@ -1,0 +1,15 @@
+.token.json
+.env
+.oauth-client.json
+.gstack/
+node_modules/
+visual-shots/
+*.md
+# Long-lived local server — must NOT become Vercel entrypoint
+server.mjs
+test.mjs
+live-*.mjs
+dump-schemas.mjs
+scripts/
+data/
+.vercel/

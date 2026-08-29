@@ -462,9 +462,11 @@ async function load() {
     /* ignore */
   }
   try {
-    state.mcpStatus = await fetch("/api/mcp/status").then((r) => r.json());
+    const statusRes = await fetch("/api/mcp/status");
+    if (!statusRes.ok) throw new Error(`mcp status ${statusRes.status}`);
+    state.mcpStatus = await statusRes.json();
   } catch {
-    state.mcpStatus = { mode: "static_python", tokenOnServer: false };
+    state.mcpStatus = { mode: "static_host", tokenOnServer: false };
   }
   await ensureHistoryCache();
   state.intentSport.constraints.steps = loadWalkSteps();
@@ -2176,9 +2178,12 @@ async function render() {
   if (state.screen === "home") {
     await ensureHistoryCache();
     const hasToken = Boolean(state.mcpStatus?.tokenOnServer);
+    const staticHost = state.mcpStatus?.mode === "static_host";
     const sessionChip = hasToken
       ? `<span class="home-nav__mcp is-on" role="status"><span class="home-nav__mcp-dot" aria-hidden="true"></span>підключено</span>`
-      : `<a class="home-nav__mcp is-off" href="/auth/start">Увійти</a>`;
+      : staticHost
+        ? `<span class="home-nav__mcp is-off" role="status" title="Живий логін Сільпо — локально: node server.mjs">демо</span>`
+        : `<a class="home-nav__mcp is-off" href="/auth/start">Увійти</a>`;
     paint(
       `
       <section class="home-hero home-hero--need" aria-label="СільпоSE">

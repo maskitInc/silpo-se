@@ -1,0 +1,5 @@
+{
+  "name": "silpo-se",
+  "private": true,
+  "description": "СільпоSE static demo for Vercel (fixtures). Local MCP: node server.mjs"
+}

@@ -11,6 +11,8 @@
 # Agent / local tooling
 .gstack/
 **/.gstack/
+.vercel/
+**/.vercel/
 .DS_Store
 **/.DS_Store
 

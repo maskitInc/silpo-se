@@ -4,7 +4,13 @@
 
 Мобільний web-прототип (без окремого npm-пакета застосунку). Живий каталог і кошик — через офіційний MCP Сільпо після OAuth; без токена — чесні фікстури.
 
-## Швидкий старт
+## Спробувати онлайн
+
+**https://silpo-se.vercel.app/** — публічне демо (фікстури).
+
+На Vercel крутиться **статика** з `prototype/` (UI + Sport/Express). Живий MCP / OAuth / «Погодити → кошик» — лише локально через `node server.mjs` (кнопка «Увійти» на демо не підключена до Silpo).
+
+## Швидкий старт (локально + MCP)
 
 ```bash
 cd prototype
@@ -16,6 +22,15 @@ node server.mjs
 Опційно: `SILPO_MCP_TOKEN=…` у середовищі (див. `prototype/.env.example`). Токен лишається на сервері, не у браузері.
 
 Регресії: `cd prototype && node test.mjs`
+
+### Деплой Vercel
+
+```bash
+cd prototype
+npx vercel --prod
+```
+
+Конфіг: `vercel.json` + `package.json` (framework none). `server.mjs` у `.vercelignore` — інакше Vercel підхоплює його як Node entry і ламає статику. SSO protection вимкнено для публічного доступу.
 
 ## Що всередині
 
