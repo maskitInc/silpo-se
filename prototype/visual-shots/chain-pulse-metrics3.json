@@ -1,0 +1,7 @@
+[
+  ["viewport", "390x844"],
+  ["goto", "http://127.0.0.1:8766/?v=ds568#/"],
+  ["js", "await new Promise(r => setTimeout(r, 2000)); 'boot'"],
+  ["wait", ".home-pulse--craft .home-pulse__spark-wrap"],
+  ["js", "(function(){ const wrap=document.querySelector('.home-pulse--craft .home-pulse__spark-wrap'); const wr=wrap.getBoundingClientRect(); const pitch=+wrap.dataset.sparkPitch; const rest=+wrap.dataset.sparkRestX; const seg=wrap.dataset.sparkSegLens; const line=wrap.querySelector('path.home-pulse__ribbon-line, path.home-pulse__spark-line, path:not([class*=fill]):not([class*=glow])') || [...wrap.querySelectorAll('path')].find(p=>/ribbon-line|spark-line/.test(p.className||'')); const paths=[...wrap.querySelectorAll('path')].map(p=>({c:p.className?.baseVal||p.getAttribute('class'), dlen:(p.getAttribute('d')||'').length, last:(p.getAttribute('d')||'').slice(-40)})); const ticks=[...wrap.querySelectorAll('.home-pulse__week-tick')].map(el=>{const r=el.getBoundingClientRect(); return {t:el.textContent.trim(), left:Math.round(r.left-wr.left), prior:el.classList.contains('is-prior')};}); return JSON.stringify({wrapW:Math.round(wr.width),pitch,rest,seg,ticks,paths}); })()"]
+]

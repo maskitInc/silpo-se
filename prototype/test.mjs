@@ -19,7 +19,7 @@ import { isPinnedQuery, preferFresh, slugForFreshQuery } from "./js/fresh.js";
 import { browseHrefFromState, parseLocationHash, shopAddHref } from "./js/hash.js";
 import { productImage, lineFromProduct, lineTotalPrice, cartQuantity, amountLabelFromLine } from "./js/mcp/normalize.js";
 import { ordersToReceipts, receiptId, freqFromReceipts, topLinesForThumbStrip } from "./js/receipts.js";
-import { aggregateMonthPulse, buildMonthWeekChartSeries, buildSparkPanStripFromNeighbors, buildSparkPanStripSeries, dayExpensivePeaks, dayKeyISO, historyWeekSpendMax, loadMonthGoalUah, MONTH_GOAL_KEY, monthKeyFromAt, monthKeyFromDragDx, neighborMonthKeys, pulseInsightLine, receiptPairDelta, resolveMonthGoalUah, saveMonthGoalUah, seamDedupePeekSeries, sparkLandWeekStarts, sparkSharedYMax, suggestMonthGoalUah, weekExpensivePeaks, weekOverWeekDelta } from "./js/spend.js";
+import { aggregateMonthPulse, buildMonthWeekChartSeries, buildSparkPanStripFromNeighbors, buildSparkPanStripSeries, dayExpensivePeaks, dayKeyISO, historyWeekSpendMax, loadMonthGoalUah, MONTH_GOAL_KEY, monthKeyFromAt, monthKeyFromDragDx, neighborMonthKeys, pulseInsightLine, receiptPairDelta, resolveMonthGoalUah, saveMonthGoalUah, seamDedupePeekSeries, sparkLandWeekStarts, sparkPanelPitch, sparkSharedYMax, suggestMonthGoalUah, weekExpensivePeaks, weekOverWeekDelta } from "./js/spend.js";
 import { applyQtyDelta, applyQtyOverrides, effectiveUnits, repriceLine } from "./js/qty.js";
 import { mergeReceiptIntoShopVm, isBagLine } from "./js/merge.js";
 import { expressMembershipForMeal } from "./js/express-membership.js";
@@ -923,6 +923,32 @@ if (productImage({}) !== "") throw new Error("productImage empty");
     }
     if (uneven.curLen <= uneven.nearestNewerLen) {
       throw new Error("expected longer center than newer for void-bug fixture");
+    }
+    // Rest pitch: short cur + long older must still fill chartW (not neighbor max).
+    {
+      const chartW = 300;
+      const xPad = 2;
+      const curLen = 2;
+      const neighborMax = Math.max(...(uneven.segmentLens || [5]));
+      const wrongPitch = (chartW - 2 * xPad) / (Math.max(2, curLen, neighborMax) - 1);
+      const wrongSpan = (curLen - 1) * wrongPitch;
+      if (wrongSpan / (chartW - 2 * xPad) > 0.55) {
+        throw new Error("fixture: wrong pitch should leave large void");
+      }
+      const pitch = sparkPanelPitch(chartW, xPad, curLen);
+      const span = (curLen - 1) * pitch;
+      if (Math.abs(span - (chartW - 2 * xPad)) > 0.01) {
+        throw new Error(`sparkPanelPitch must fill chartW; span=${span}`);
+      }
+    }
+    // Full-month week mesh (not MTD truncate): Sep 2026 → weeks through month end.
+    {
+      const sep = buildMonthWeekChartSeries([], "2026-09");
+      const live = sep.filter((s) => !s.prior);
+      if (live.length < 4) throw new Error(`sep mesh too short ${live.length}`);
+      if (!live.some((s) => String(s.weekStart).startsWith("2026-09-2"))) {
+        throw new Error("sep mesh must include late-month week");
+      }
     }
     const julAsCenter = buildSparkPanStripFromNeighbors({
       older: [buildMonthWeekChartSeries(receipts, "2026-06")],
@@ -2542,6 +2568,23 @@ if (productImage({}) !== "") throw new Error("productImage empty");
   if (!/shop-progress__wallet-card--shell/.test(shellStrip)) throw new Error("wallet shell class");
   const cta = shopDockCtaHtml({ okCount: 5, sumLabel: "400" });
   if (!/dock-cta__sum/.test(cta) || !/Погодити 5/.test(cta)) throw new Error(`dock cta ${cta}`);
+  const ctaResolving = shopDockCtaHtml({ okCount: 5, sumLabel: "400", resolving: true });
+  if (!/disabled/.test(ctaResolving) || !/btn-busy__spin/.test(ctaResolving) || !/Оновлюємо список/.test(ctaResolving)) {
+    throw new Error(`dock resolving ${ctaResolving}`);
+  }
+  const ctaPush = shopDockCtaHtml({ okCount: 5, sumLabel: "400", pushing: true });
+  if (!/disabled/.test(ctaPush) || !/btn-busy__spin/.test(ctaPush) || !/Додаємо в кошик/.test(ctaPush)) {
+    throw new Error(`dock pushing ${ctaPush}`);
+  }
+  const ctaConfirmed = shopDockCtaHtml({
+    okCount: 5,
+    sumLabel: "400",
+    confirmed: true,
+    checkoutHref: "https://silpo.ua/cart-test",
+  });
+  if (!/Додати ще/.test(ctaConfirmed) || !/<button/.test(ctaConfirmed) || /target="_blank"/.test(ctaConfirmed)) {
+    throw new Error(`dock confirmed ${ctaConfirmed}`);
+  }
   const tightStrip = shopProgressStripHtml({
     okCount: 5,
     totalCount: 5,

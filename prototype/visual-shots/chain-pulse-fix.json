@@ -1,0 +1,10 @@
+[
+  ["viewport", "390x844"],
+  ["goto", "http://127.0.0.1:8766/?v=ds571&month=prev#/"],
+  ["js", "await new Promise(r => setTimeout(r, 1800)); 'boot'"],
+  ["wait", ".home-pulse--sport"],
+  ["js", "document.querySelectorAll('.home-pulse,.home-ritual,.home-hero,.screen-enter').forEach(el=>{el.style.animation='none';el.style.opacity='1';el.style.transform='none';}); document.querySelector('.home-pulse--sport')?.scrollIntoView({block:'center'}); await new Promise(r => setTimeout(r, 400)); 'sport'"],
+  ["screenshot", "--viewport", "visual-shots/shorts-90s/24-pulse-fix-home.png"],
+  ["js", "document.querySelector('.home-pulse--craft')?.scrollIntoView({block:'center'}); await new Promise(r => setTimeout(r, 400)); 'express'"],
+  ["screenshot", "--viewport", "visual-shots/shorts-90s/24-pulse-fix-express.png"]
+]

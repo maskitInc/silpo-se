@@ -1,0 +1,44 @@
+[
+  ["viewport", "390x844"],
+  ["goto", "http://127.0.0.1:8766/?v=ds571&month=prev#/"],
+  ["js", "localStorage.setItem('silpo.sport.surveyV0.v1', JSON.stringify({version:'survey_v0',avoidIds:[],dietTags:[],cookMode:'any',completedAt:new Date().toISOString()})); localStorage.setItem('silpo.sport.profileV0.v1', JSON.stringify({version:'profile_v0',sex:'male',age:32,heightCm:178,weightKg:78,bodyGoal:'maintain',completedAt:new Date().toISOString()})); localStorage.setItem('silpo.sport.programChosen.v1', JSON.stringify({at:Date.now()})); 'seed'"],
+  ["js", "await new Promise(r => setTimeout(r, 1600)); 'boot'"],
+  ["wait", ".home-hero"],
+  ["js", "document.querySelectorAll('.home-pulse,.home-ritual,.home-hero,.screen-enter').forEach(el=>{el.style.animation='none';el.style.opacity='1';el.style.transform='none';}); window.scrollTo(0,0); const sm=document.querySelector('.home-pulse--sport')?.dataset?.sportMonthKey; const em=document.querySelector('.home-pulse--craft')?.dataset?.monthKey; 'freeze month sport='+(sm||'?')+' express='+(em||'?')"],
+  ["screenshot", "--viewport", "visual-shots/shorts-90s/24-m0-a-home.png"],
+
+  ["js", "document.querySelector('.home-ritual[data-go=\"sport\"]')?.scrollIntoView({block:'center'}); await new Promise(r => setTimeout(r, 450)); 'rituals'"],
+  ["screenshot", "--viewport", "visual-shots/shorts-90s/24-m0-b-rituals.png"],
+
+  ["js", "document.querySelector('.home-pulse--sport')?.scrollIntoView({block:'nearest'}); await new Promise(r => setTimeout(r, 500)); (document.querySelector('.home-pulse--sport .home-pulse__mark.is-hot')||document.querySelector('.home-pulse--sport .home-pulse__phrase-btn'))?.dispatchEvent(new MouseEvent('click',{bubbles:true})); await new Promise(r => setTimeout(r, 450)); 'sport-tip'"],
+  ["screenshot", "--viewport", "visual-shots/shorts-90s/24-m0-c-sport-tip.png"],
+
+  ["goto", "http://127.0.0.1:8766/?v=ds571&month=prev#/day"],
+  ["js", "for (let i=0;i<45;i++){ if (document.querySelector('#toExpress') && !document.querySelector('.day-flow--wait')) break; await new Promise(r=>setTimeout(r,400)); } document.querySelector('#toExpress') ? 'day-ready' : 'day-timeout'"],
+  ["wait", "#toExpress"],
+  ["js", "document.querySelectorAll('.screen-enter').forEach(el=>{el.style.animation='none';el.style.opacity='1';}); window.scrollTo(0,0); await new Promise(r => setTimeout(r, 350)); 'day-top'"],
+  ["screenshot", "--viewport", "visual-shots/shorts-90s/24-m0-d-day.png"],
+
+  ["js", "document.querySelector('.day-sheet--plates')?.scrollIntoView({block:'start'}); await new Promise(r => setTimeout(r, 700)); 'plates'"],
+  ["screenshot", "--viewport", "visual-shots/shorts-90s/24-m0-d-plates.png"],
+
+  ["js", "document.querySelector('#addAllPlates')?.click(); await new Promise(r=>setTimeout(r,2200)); document.querySelector('#toExpress')?.click(); 'add-then-express'"],
+  ["js", "for (let i=0;i<60;i++){ if (document.querySelector('#shop-checklist')) break; await new Promise(r=>setTimeout(r,250)); } if(!document.querySelector('#shop-checklist')){ location.hash='#/shop'; for (let i=0;i<40;i++){ if (document.querySelector('#shop-checklist')) break; await new Promise(r=>setTimeout(r,250)); } } document.querySelector('#shop-checklist')?'shop-ok':'shop-fail'"],
+  ["wait", "#shop-checklist"],
+  ["js", "let shopIdle='shop-force-clear'; for (let i=0;i<90;i++){ const v=document.querySelector('.ui-busy-veil'); const busy=v && !v.hidden; const dock=(document.querySelector('#print')?.textContent||''); if(!busy && dock && !/Оновлюємо|Підвантаж/.test(dock)){ shopIdle='shop-idle'; break; } await new Promise(r=>setTimeout(r,500)); } if(shopIdle==='shop-force-clear'){ const v=document.querySelector('.ui-busy-veil'); if(v) v.hidden=true; document.querySelector('.phone')?.classList.remove('is-busy-veil'); } shopIdle"],
+  ["js", "window.scrollTo(0,0); await new Promise(r => setTimeout(r, 300)); (document.querySelector('.shop-progress__sport')||document.querySelector('.shop-progress')||document.querySelector('#shop-checklist'))?.scrollIntoView({block:'start'}); await new Promise(r => setTimeout(r, 350)); 'handoff'"],
+  ["screenshot", "--viewport", "visual-shots/shorts-90s/24-m0-e-handoff.png"],
+
+  ["js", "window.scrollTo(0,0); document.querySelector('.shop-progress, .shop-checkout-header')?.scrollIntoView({block:'start'}); await new Promise(r => setTimeout(r, 400)); 'wallet'"],
+  ["screenshot", "--viewport", "visual-shots/shorts-90s/24-m0-f-budget.png"],
+
+  ["js", "const isOver=()=>!!document.querySelector('.shop-progress--over'); const settle=async()=>{ await new Promise(r=>setTimeout(r,380)); const v=document.querySelector('.ui-busy-veil'); if(v&&!v.hidden){v.hidden=true; document.querySelector('.phone')?.classList.remove('is-busy-veil');} }; const minus=document.querySelector('.sku--ok [data-qty-delta=\"-1\"]')||document.querySelector('[data-qty-delta=\"-1\"]'); if(minus){ minus.click(); await settle(); } let n=0; while(isOver() && n<18){ const boxes=[...document.querySelectorAll('input[data-ok]:checked')]; const last=boxes[boxes.length-1]; if(!last) break; last.click(); await settle(); n++; } 'trim over='+isOver()+' unchecked='+n+' ok='+[...document.querySelectorAll('input[data-ok]:checked')].length"],
+  ["js", "await new Promise(r => setTimeout(r, 400)); document.querySelector('.sku--ok')?.scrollIntoView({block:'center'}); await new Promise(r => setTimeout(r, 300)); 'qty-settle'"],
+  ["screenshot", "--viewport", "visual-shots/shorts-90s/24-m0-g-qty.png"],
+
+  ["js", "document.querySelector('.sku-beacon')?.click(); await new Promise(r => setTimeout(r, 500)); 'beacon'"],
+  ["screenshot", "--viewport", "visual-shots/shorts-90s/24-m0-g-control.png"],
+
+  ["js", "document.getElementById('toast-host') && (document.getElementById('toast-host').innerHTML=''); document.querySelector('#shop-sport-handoff-dismiss')?.click(); document.querySelectorAll('.shop-sport-handoff').forEach(el=>el.remove()); document.querySelector('#print')?.scrollIntoView({block:'end'}); await new Promise(r => setTimeout(r, 450)); const v=document.querySelector('.ui-busy-veil'); if(v&&!v.hidden){v.hidden=true; document.querySelector('.phone')?.classList.remove('is-busy-veil');} 'dock-clean'"],
+  ["screenshot", "--viewport", "visual-shots/shorts-90s/24-m0-h-pogodyty.png"]
+]

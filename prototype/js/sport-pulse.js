@@ -796,6 +796,7 @@ export function sportMonthWeekChartSeries({
   const hasLiveKcal = live.some((x) => (Number(x.kcal) || 0) > 0);
   const hasAnySessions = out.some((x) => (Number(x.sessions) || 0) > 0);
   if (!hasLiveKcal && !hasAnySessions) {
+    const todayWs = weekStartISO(new Date().toISOString()) || "";
     const seed = [...mk].reduce((a, c) => a + c.charCodeAt(0), 0) || 7;
     for (let i = 0; i < out.length; i++) {
       if (out[i].prior) {
@@ -809,6 +810,8 @@ export function sportMonthWeekChartSeries({
         };
         continue;
       }
+      /* Full-month mesh includes future weeks — keep them empty (no invented kcal). */
+      if (todayWs && String(out[i].weekStart) > todayWs) continue;
       const sessions = (seed + i) % 3 === 0 ? 1 : 0;
       const kcal = 2200 + ((seed * (i + 3)) % 2800) + (i % 2 === 0 ? 400 : 0);
       out[i] = { ...out[i], sessions, kcal, over: kcal > weekBudget, demo: true };

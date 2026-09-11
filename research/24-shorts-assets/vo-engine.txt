@@ -1,0 +1,11 @@
+engine=tts-uk
+voice=mykyta
+prosody=token_dur=0.88;sigma_f0=1.55;sigma_e=1.5;sigma_dec=0.95;sigma_dur=1.05;takes=best-of-10;clause=0.26;phrase_fade=0.014
+note=f0_std_noop_unless_f0_mean>0;expression-punct;sigma-up;friend-breath-phrase-surgery-2026-09-07
+frontend=hero-stress-plus;bang-question-contour
+postfx=loudnorm+gentle-lufs-lift
+duration=90.000000
+stem=vo-shorts-90s-ua
+plan_hash=4a68931f7988
+built_at=2026-09-06T21:50:23Z
+builder=vo-build

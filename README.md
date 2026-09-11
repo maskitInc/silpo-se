@@ -43,7 +43,7 @@ npx vercel --prod
 | Екран | Що робить |
 | --- | --- |
 | **Home** | Два pulse: Sport → Express; CTA «Пігнали» / «Замовити» |
-| **Sport** | Програми, сесія, тарілки дня, кроки |
+| **Sport** | Програми, сесія, страви дня, кроки |
 | **Express** | Чеклист з чеків, гаманець-чек, qty ±, списки/бази, **Погодити → долив у живий кошик Сільпо** |
 
 Після «Погодити» (з логіном): `POST /api/cart/push` — ідемпотентний merge (без подвоєння qty) + soft handoff на checkout-лінк.
@@ -52,9 +52,11 @@ npx vercel --prod
 
 | Файл | Навіщо |
 | --- | --- |
+| [CAPABILITIES.md](CAPABILITIES.md) | **Що вміє MVP** — повний опис функціоналу |
 | [prototype/README.md](prototype/README.md) | Запуск, API, модулі |
 | [prototype/DESIGN.md](prototype/DESIGN.md) | Дизайн-рішення (SSoT UI) |
 | [PITCH.md](PITCH.md) | Скрипт показу ~90 с |
+| [research/24-shorts-90s-scenario.md](research/24-shorts-90s-scenario.md) | Шортс 90 с: shot-list, silent + VO |
 | [research/17-jury-recording-checklist.md](research/17-jury-recording-checklist.md) | Чеклист запису для журі |
 | [research/05-composer-architecture.md](research/05-composer-architecture.md) | Composer × MCP × gate |
 | [research/08-oauth-local.md](research/08-oauth-local.md) | Локальний OAuth |

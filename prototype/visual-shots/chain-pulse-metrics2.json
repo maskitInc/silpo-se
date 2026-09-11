@@ -1,0 +1,7 @@
+[
+  ["viewport", "390x844"],
+  ["goto", "http://127.0.0.1:8766/?v=ds567#/"],
+  ["js", "await new Promise(r => setTimeout(r, 2000)); 'boot'"],
+  ["wait", ".home-pulse--sport .home-pulse__spark-wrap"],
+  ["js", "(function(){ const wrap=document.querySelector('.home-pulse--sport .home-pulse__spark-wrap'); const wr=wrap.getBoundingClientRect(); const pitch=Number(wrap.dataset.sparkPitch); const rest=Number(wrap.dataset.sparkRestX); const axes=[...wrap.querySelectorAll('.home-pulse__axis-day, .home-pulse__spark-axis span, [class*=axis]')].slice(0,6).map(el=>{const r=el.getBoundingClientRect(); return {t:el.textContent.trim(), left:Math.round(r.left-wr.left)};}); const marks=[...wrap.querySelectorAll('.home-pulse__mark, circle')].slice(0,8).map(el=>{const r=el.getBoundingClientRect(); return {left:Math.round(r.left-wr.left), top:Math.round(r.top-wr.top)};}); const paths=[...wrap.querySelectorAll('path')].map(p=>({cls:p.getAttribute('class'), d:(p.getAttribute('d')||'').slice(0,80)})); return JSON.stringify({wrapW:Math.round(wr.width), pitch, rest, axes, marks, pathN:paths.length, paths:paths.slice(0,4), seg:wrap.dataset.sparkSegLens, segi:wrap.dataset.sparkSegI}); })()"]
+]

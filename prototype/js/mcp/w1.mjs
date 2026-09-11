@@ -1,5 +1,6 @@
 import {
   extractCheckout,
+  extractCheckoutLinks,
   extractBranchLabel,
   lineFromProduct,
   amountLabelFromProduct,
@@ -536,9 +537,12 @@ export async function pushCartProducts(token, products = [], { merge = true } = 
   }
 
   if (!toAdd.length) {
+    const links = extractCheckoutLinks(byId.json);
     return {
       ok: true,
-      checkout: extractCheckout(byId.json),
+      checkout: links.primary,
+      checkoutWeb: links.web,
+      checkoutMobile: links.mobile,
       added: 0,
       skipped,
       already,
@@ -572,11 +576,13 @@ export async function pushCartProducts(token, products = [], { merge = true } = 
     shoppingCartId: context.shoppingCartId,
   });
   trace.push({ tool: "silpo_get_shopping_cart_by_id", http: again.http, phase: "after_write" });
-  const checkout = extractCheckout(again.json);
+  const links = extractCheckoutLinks(again.json);
 
   return {
     ok: true,
-    checkout,
+    checkout: links.primary,
+    checkoutWeb: links.web,
+    checkoutMobile: links.mobile,
     added: toAdd.length,
     skipped,
     already,

@@ -42,6 +42,18 @@ export function currentMonthKey(now = new Date()) {
   return `${y}-${mo}`;
 }
 
+/** Shift YYYY-MM by whole months (UTC). */
+export function addMonthsKey(monthKey, deltaMonths) {
+  const m = String(monthKey || "").match(/^(\d{4})-(\d{2})$/);
+  if (!m) return currentMonthKey();
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1 + Number(deltaMonths || 0), 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+export function prevMonthKey(now = new Date()) {
+  return addMonthsKey(currentMonthKey(now), -1);
+}
+
 export function loadMonthGoalUah(storage = globalThis.localStorage, fallback = 6000) {
   try {
     const raw = storage?.getItem?.(MONTH_GOAL_KEY);
@@ -347,8 +359,9 @@ function topSkuOverlap(a, b) {
 }
 
 /**
- * Week buckets for the month chart: every Monday covering the month so far,
+ * Week buckets for the month chart: every Monday covering the full calendar month,
  * plus a prior-week anchor (last week before the month with spend, else immediate prev).
+ * Future / empty weeks stay at 0 so the ribbon reaches month end (no mid-panel void).
  * @returns {Array<{ weekStart: string, uah: number, receiptCount: number, prior?: boolean }>}
  */
 export function buildMonthWeekChartSeries(receipts, monthKey, opts = {}) {
@@ -357,20 +370,8 @@ export function buildMonthWeekChartSeries(receipts, monthKey, opts = {}) {
   const [y, m] = String(mk).split("-").map(Number);
   if (!y || !m) return [];
   const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
-  let lastActiveDay = 0;
-  for (const r of list) {
-    if (monthKeyFromAt(r.at) !== mk) continue;
-    const dk = dayKeyISO(r.at);
-    if (!dk) continue;
-    const dayN = Number(dk.slice(8, 10));
-    if (dayN > lastActiveDay) lastActiveDay = dayN;
-  }
-  const now = new Date();
-  if (currentMonthKey(now) === mk) {
-    lastActiveDay = Math.max(lastActiveDay, now.getUTCDate());
-  }
-  if (!lastActiveDay) lastActiveDay = Math.min(daysInMonth, Number(opts.minDays) || 7);
-  lastActiveDay = Math.min(Math.max(lastActiveDay, 1), daysInMonth);
+  // Full-month mesh (not MTD truncate) — pitch + axis must reach last week of month.
+  const lastActiveDay = daysInMonth;
 
   const monthStart = `${mk}-01`;
   const monthEnd = `${mk}-${String(lastActiveDay).padStart(2, "0")}`;
@@ -555,6 +556,20 @@ export function sparkLandWeekStarts(strip, side = "prev") {
 }
 
 /**
+ * Horizontal pitch for rest viewport: one on-screen month fills chartW.
+ * Do NOT use max(neighbor segmentLens) — short months leave a right void.
+ * @param {number} chartW
+ * @param {number} xPad
+ * @param {number} curLen points in current month series (incl. prior anchor)
+ */
+export function sparkPanelPitch(chartW, xPad, curLen) {
+  const w = Number(chartW) || 0;
+  const pad = Number(xPad) || 0;
+  const refLen = Math.max(2, Number(curLen) || 0);
+  return (w - 2 * pad) / (refLen - 1);
+}
+
+/**
  * Nav keys are newest-first. older = prev months (nearest first), newer = next months.
  * @param {string[]} monthKeys
  * @param {string} monthKey
@@ -675,7 +690,9 @@ export function aggregateMonthPulse(receipts, opts = {}) {
     .slice()
     .sort((a, b) => new Date(b.at) - new Date(a.at));
 
-  const recentReceiptIds = dated.slice(0, recentN).map((r) => r.id);
+  // Pills under pulse must match viewed month (not leak Aug under Sep).
+  const recentInMonth = dated.filter((r) => monthKeyFromAt(r.at) === monthKey);
+  const recentReceiptIds = recentInMonth.slice(0, recentN).map((r) => r.id);
 
   const anchor = dated[0]?.at ? new Date(dated[0].at) : new Date(`${monthKey}-15T12:00:00.000Z`);
   const weekKeys = [];

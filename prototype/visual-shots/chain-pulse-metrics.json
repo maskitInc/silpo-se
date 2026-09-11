@@ -1,0 +1,7 @@
+[
+  ["viewport", "390x844"],
+  ["goto", "http://127.0.0.1:8766/?v=ds567#/"],
+  ["js", "await new Promise(r => setTimeout(r, 2000)); 'boot'"],
+  ["wait", ".home-pulse--sport .home-pulse__spark-wrap"],
+  ["js", "(function(){ function m(sel){ const wrap=document.querySelector(sel+' .home-pulse__spark-wrap'); if(!wrap) return null; const track=wrap.querySelector('.home-pulse__spark-track, svg, [class*=spark]'); const svg=wrap.querySelector('svg'); const path=wrap.querySelector('path.home-pulse__spark-line, path'); const w=wrap.getBoundingClientRect(); const tr=wrap.querySelector('[style*=transform], .home-pulse__spark-track'); const style=tr?getComputedStyle(tr).transform:''; const ds=path?path.getAttribute('d'):''; let xs=[]; if(ds){ const re=/[ML]\\s*([\\d.]+)/g; let x; while((x=re.exec(ds))) xs.push(Number(x[1])); } const minX=xs.length?Math.min(...xs):null; const maxX=xs.length?Math.max(...xs):null; return {wrapW:Math.round(w.width), transform:style, pathMinX:minX, pathMaxX:maxX, pathSpan:maxX!=null&&minX!=null?maxX-minX:null, fill:maxX!=null&&minX!=null?(maxX-minX)/Math.max(1,w.width):null, peekR:wrap.dataset.sparkPeekRight||wrap.getAttribute('data-spark-peek-right'), restX:wrap.style.getPropertyValue('--spark-rest-x')||wrap.dataset.sparkRestX}; } return JSON.stringify({sport:m('.home-pulse--sport'), express:m('.home-pulse--craft')||m('.home-pulse:not(.home-pulse--sport)')}); })()"]
+]

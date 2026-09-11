@@ -15,6 +15,17 @@
 **/.vercel/
 .DS_Store
 **/.DS_Store
+**/.venv-tts/
+**/.venv-tts-uk/
+**/.venv-stt2/
+**/models/styletts2-ua-single/
+**/models/radtts-*/
+**/_sample-*.mp3
+**/_sample-*.wav
+**/_spike-*.wav
+**/_local_*.wav
+**/_ab-*.wav
+**/vo-ab-*
 
 # Dependencies (Playwright etc. — reinstall locally if needed)
 node_modules/
@@ -25,3 +36,8 @@ node_modules/
 .vscode/
 *.log
 .vercel
+
+__pycache__/
+**/__pycache__/
+.cursor/
+**/watch.pid

@@ -95,7 +95,10 @@ img { max-width: 100%; }
   opacity: 0.02;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
 }
-.phone > *:not(.sr-only) { position: relative; z-index: 2; }
+.phone > *:not(.sr-only):not(.ui-busy-veil) { position: relative; z-index: 2; }
+#toast-host {
+  z-index: 35;
+}
 .screen-enter {
   animation: rise var(--dur-screen) var(--ease) both;
 }
@@ -281,6 +284,38 @@ img { max-width: 100%; }
   background: var(--leaf);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--leaf) 22%, transparent);
   flex: none;
+}
+
+.auth-connect-wait {
+  min-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.auth-connect-wait__body {
+  margin-top: 18px;
+  padding: 8px 2px 4px;
+}
+.auth-connect-wait__title {
+  margin: 0;
+  font-family: var(--font-display, "Cormorant Garamond", serif);
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+.auth-connect-wait__chip {
+  pointer-events: none;
+}
+.shop-dock-checkout .linkish {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
 }
 .home-nav__login {
   display: inline-flex;
@@ -905,9 +940,10 @@ img { max-width: 100%; }
 .home-pulse__month-btn {
   display: inline-grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
-  margin: 0;
+  /* Visual ~26px glyph; expand hit via padding so taps match pan reliability */
+  width: 32px;
+  height: 32px;
+  margin: 0 -3px;
   padding: 0;
   border: 0;
   border-radius: 999px;
@@ -918,6 +954,7 @@ img { max-width: 100%; }
   line-height: 1;
   cursor: pointer;
   opacity: 0.85;
+  touch-action: manipulation;
 }
 .home-pulse__month-btn:hover:not(:disabled) {
   background: color-mix(in oklch, currentColor 10%, transparent);
@@ -2768,6 +2805,14 @@ span.home-pulse__delta-chip {
 .home-pulse__week-tick.is-prior {
   opacity: 0.45;
   font-weight: 600;
+}
+.home-pulse__week-tick.is-future {
+  opacity: 0.38;
+}
+.home-pulse__ribbon-line--future {
+  stroke-dasharray: 5 4;
+  opacity: 0.5;
+  stroke-linecap: round;
 }
 .home-pulse--sku-lit .home-pulse__week-badge,
 .home-pulse--insight-open .home-pulse__week-badge,
@@ -9136,6 +9181,79 @@ span.home-pulse__delta-chip {
   opacity: 0.92;
   filter: none;
 }
+.dock-cta.is-busy .dock-cta__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.dock-cta.is-busy .btn-busy__spin {
+  border-color: color-mix(in oklch, #fff 40%, transparent);
+  border-top-color: #fff;
+}
+.is-ui-frozen {
+  position: relative;
+  pointer-events: none !important;
+  user-select: none;
+  cursor: progress;
+}
+.is-ui-frozen .dock-cta.is-busy {
+  opacity: 1;
+  filter: none;
+}
+/* Full-phone dim + status — fixed to viewport so chip always visible while scrolled */
+.ui-busy-veil {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: min(430px, 100vw);
+  transform: translateX(-50%);
+  z-index: 28;
+  display: grid;
+  place-items: center;
+  justify-items: center;
+  padding:
+    max(20px, env(safe-area-inset-top, 0px))
+    18px
+    max(20px, env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+  background: color-mix(in oklch, oklch(0.22 0.02 150) 48%, transparent);
+  pointer-events: auto;
+  cursor: progress;
+}
+.ui-busy-veil[hidden] {
+  display: none !important;
+}
+.ui-busy-veil__card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(20rem, calc(100% - 8px));
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: color-mix(in oklch, var(--elev) 94%, white);
+  color: var(--ink);
+  box-shadow:
+    0 1px 0 oklch(1 0 0 / 0.65),
+    0 16px 48px oklch(0.18 0.03 150 / 0.35);
+  pointer-events: none;
+}
+.ui-busy-veil__card p {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 750;
+  letter-spacing: -0.015em;
+  line-height: 1.35;
+}
+.ui-busy-veil__card .btn-busy__spin {
+  flex: 0 0 auto;
+  margin-top: 0;
+  width: 1.15em;
+  height: 1.15em;
+  border-color: color-mix(in oklch, var(--leaf-ink, var(--leaf)) 28%, transparent);
+  border-top-color: var(--leaf-ink, var(--leaf));
+}
 .btn-busy__spin {
   width: 1.05em;
   height: 1.05em;
@@ -9727,6 +9845,46 @@ span.home-pulse__delta-chip {
   flex-direction: column;
   gap: 10px;
   margin: 4px 0 12px;
+}
+.shop-checklist--resolving {
+  cursor: progress;
+  user-select: none;
+  position: relative;
+}
+.shop-checklist--resolving .group--sheet,
+.shop-checklist--resolving .shop-program,
+.shop-checklist--resolving #add-cat {
+  opacity: 0.38;
+  filter: grayscale(0.35);
+  pointer-events: none;
+}
+.shop-list-wait {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 4px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1.5px solid color-mix(in oklch, var(--leaf) 55%, var(--line));
+  background: color-mix(in oklch, var(--elev) 70%, oklch(0.92 0.04 145));
+  color: var(--ink);
+  box-shadow: 0 1px 0 oklch(1 0 0 / 0.65);
+  pointer-events: none;
+  z-index: 1;
+}
+.shop-list-wait p {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 750;
+  letter-spacing: -0.015em;
+  line-height: 1.35;
+  color: var(--ink);
+}
+.shop-list-wait .btn-busy__spin {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  border-color: color-mix(in oklch, var(--leaf-ink, var(--leaf)) 28%, transparent);
+  border-top-color: var(--leaf-ink, var(--leaf));
 }
 .group--sheet,
 .group.group--sheet {
@@ -11523,6 +11681,12 @@ span.home-pulse__delta-chip {
   gap: 12px;
   width: 100%;
   text-align: left;
+  text-decoration: none;
+  color: inherit;
+  box-sizing: border-box;
+}
+a.dock-cta:visited {
+  color: inherit;
 }
 .shop-flow--checkout .dock-cta__label {
   flex: 1;

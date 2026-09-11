@@ -1,0 +1,15 @@
+# Placeholder — replace with your ADR take
+
+Drop `human-take.wav` (or .m4a/.mp3) **in this folder**.
+
+If `vo-takes-watch.sh --daemon` is running, remux to M2 is automatic.
+Else:
+
+```bash
+cd silpo-ai-projects/life-apps/prototype
+./scripts/vo-tools/vo-adr-remux.sh ../research/24-shorts-assets/takes/human-take.wav
+# or start watcher:
+./scripts/vo-tools/vo-takes-watch.sh --daemon
+```
+
+Cue: `../vo-adr-cue.txt` · booth: `../adr-booth.md` · hash must match `../vo-engine.txt`

@@ -108,6 +108,7 @@ import {
   buildMonthWeekChartSeries,
   buildSparkPanStripFromNeighbors,
   buildSparkPanStripSeries,
+  addMonthsKey,
   currentMonthKey,
   dayKeyISO,
   historyWeekSpendMax,
@@ -115,7 +116,9 @@ import {
   monthKeyFromAt,
   monthKeyFromDragDx,
   neighborMonthKeys,
+  prevMonthKey,
   sparkLandWeekStarts,
+  sparkPanelPitch,
   sparkSharedYMax,
   monthOverMonthDelta,
   monthStoryLine,
@@ -342,10 +345,14 @@ const state = {
   swaps: {},
   picker: null,
   confirmed: false,
-  /** Soft handoff URL after MCP cart push. */
+  /** Soft handoff URL after MCP cart push (web-first). */
   checkoutUrl: "",
+  checkoutWebUrl: "",
+  checkoutMobileUrl: "",
   /** In-flight cart push from Погодити. */
   cartPushing: false,
+  /** Soft local list shown while MCP resolve still in flight — dock locked. */
+  shopResolving: false,
   debug: false,
   mcpStatus: null,
   lastSource: "",
@@ -392,6 +399,7 @@ const state = {
   /** @type {string|null} selected pulse month YYYY-MM; null → current */
   pulseMonthKey: null,
   /** @type {string|null} Sport card month YYYY-MM; independent of Express pulse */
+  sportPulseMonthKey: null,
   /** @type {string|null} Sport day screen selected ISO (YYYY-MM-DD); default today */
   dayISO: null,
   /** Day plates VM cache — fingerprint ignores dayISO (session/plates don't vary by calendar day). */
@@ -403,14 +411,15 @@ const state = {
 };
 
 /** Load receipts once per session (API → fixture fallback). Stale after 15 min. */
-async function ensureHistoryCache(force = false) {
+async function ensureHistoryCache(force = false, opts = {}) {
   const TTL = 15 * 60 * 1000;
+  const timeoutMs = Number(opts.timeoutMs) > 0 ? Number(opts.timeoutMs) : 7000;
   if (!force && state.historyCache.loadedAt && Date.now() - state.historyCache.loadedAt < TTL) {
     return state.historyCache;
   }
   try {
     const ac = typeof AbortController !== "undefined" ? new AbortController() : null;
-    const timer = ac ? setTimeout(() => ac.abort(), 7000) : null;
+    const timer = ac ? setTimeout(() => ac.abort(), timeoutMs) : null;
     const r = await fetch("/api/history", ac ? { signal: ac.signal } : undefined);
     if (timer) clearTimeout(timer);
     if (r.ok) {
@@ -421,6 +430,7 @@ async function ensureHistoryCache(force = false) {
           freq: data.freq || freqFromReceipts(data.receipts),
           loadedAt: Date.now(),
           source: data.source || "api",
+          tokenOnServer: Boolean(data.tokenOnServer),
         };
         return state.historyCache;
       }
@@ -439,14 +449,124 @@ async function ensureHistoryCache(force = false) {
       freq: freqFromReceipts(receipts),
       loadedAt: Date.now(),
       source: "fixture",
+      tokenOnServer: Boolean(state.mcpStatus?.tokenOnServer),
     };
   } catch {
-    state.historyCache = { receipts: [], freq: {}, loadedAt: Date.now(), source: "empty" };
+    state.historyCache = {
+      receipts: [],
+      freq: {},
+      loadedAt: Date.now(),
+      source: "empty",
+      tokenOnServer: Boolean(state.mcpStatus?.tokenOnServer),
+    };
   }
   return state.historyCache;
 }
 
+function consumeJustAuthedFlag() {
+  try {
+    if (sessionStorage.getItem("silpo.justAuthed") === "1") {
+      sessionStorage.removeItem("silpo.justAuthed");
+      return true;
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    const q = new URLSearchParams(globalThis.location?.search || "");
+    if (q.get("auth") === "ok") {
+      q.delete("auth");
+      const next = `${location.pathname}${q.toString() ? `?${q}` : ""}${location.hash || ""}`;
+      history.replaceState(null, "", next);
+      return true;
+    }
+  } catch {
+    /* ignore */
+  }
+  return false;
+}
+
+function authConnectWaitHtml() {
+  return `
+    <section class="home-hero home-hero--need auth-connect-wait" aria-busy="true" aria-live="polite" aria-label="Підключення Сільпо">
+      <header class="home-nav">
+        <div class="home-nav__brand-block">
+          ${brandMarkHtml({ product: "sportExpress", size: "hero", tag: "span", className: "home-nav__brand" })}
+          <span class="home-nav__whisper">підключаємо акаунт</span>
+        </div>
+        <span class="home-nav__mcp is-on auth-connect-wait__chip" role="status">
+          <span class="home-nav__mcp-dot" aria-hidden="true"></span>зʼєднуємо…
+        </span>
+      </header>
+      <div class="swap-wait auth-connect-wait__body" role="status">
+        <div class="swap-track" aria-hidden="true"><div class="swap-fill"></div></div>
+        <p class="auth-connect-wait__title">Підключаємо Сільпо…</p>
+        <p class="muted">Оновлюємо статус і чеки. Це може зайняти кілька секунд.</p>
+      </div>
+      <div class="skel skel--lg" aria-hidden="true"></div>
+      <div class="skel" aria-hidden="true"></div>
+      <div class="skel" aria-hidden="true"></div>
+    </section>
+  `;
+}
+
+function paintAuthConnectWait() {
+  const app = document.getElementById("app");
+  if (!app) return;
+  app.innerHTML = authConnectWaitHtml();
+}
+
+function historyLooksFixture(src) {
+  const s = String(src || "");
+  return !s || s === "fixture" || s.startsWith("fixture_") || s === "empty";
+}
+
+async function syncAfterAuth() {
+  await refreshMcpStatusQuiet();
+  await ensureHistoryCache(true, { timeoutMs: 14000 });
+  const hasTok = Boolean(state.mcpStatus?.tokenOnServer);
+  const src = state.historyCache?.source;
+  if (hasTok && historyLooksFixture(src) && src !== "mcp") {
+    await new Promise((r) => setTimeout(r, 1400));
+    await ensureHistoryCache(true, { timeoutMs: 14000 });
+  }
+  if (hasTok) {
+    toast("Підключено до Сільпо");
+  } else {
+    toast("Вхід був, але токен ще не видно — спробуйте оновити");
+  }
+}
+
+function shiftMonthKey(monthKey, deltaMonths) {
+  return addMonthsKey(monthKey, deltaMonths);
+}
+
+/** Shorts / booth: `?month=prev` or `?sportMonth=YYYY-MM&pulseMonth=YYYY-MM`. */
+function applyMonthQueryParams() {
+  try {
+    const q = new URLSearchParams(globalThis.location?.search || "");
+    const rawMonth = (q.get("month") || "").trim();
+    const rawSport = (q.get("sportMonth") || rawMonth).trim();
+    const rawPulse = (q.get("pulseMonth") || rawMonth).trim();
+    const prev = prevMonthKey();
+    const norm = (v) => {
+      if (!v) return null;
+      if (v === "prev" || v === "previous" || v === "last") return prev;
+      return /^\d{4}-\d{2}$/.test(v) ? v : null;
+    };
+    const sport = norm(rawSport);
+    const pulse = norm(rawPulse);
+    if (sport) state.sportPulseMonthKey = sport;
+    if (pulse) state.pulseMonthKey = pulse;
+  } catch {
+    /* ignore */
+  }
+}
+
 async function load() {
+  const justAuthed = consumeJustAuthedFlag();
+  if (justAuthed) paintAuthConnectWait();
+
   const [kb, shelf] = await Promise.all([
     fetch("./content/kb.json").then((r) => r.json()),
     fetch("./content/shelf.json").then((r) => r.json()),
@@ -461,15 +581,25 @@ async function load() {
   } catch {
     /* ignore */
   }
-  try {
-    const statusRes = await fetch("/api/mcp/status");
-    if (!statusRes.ok) throw new Error(`mcp status ${statusRes.status}`);
-    state.mcpStatus = await statusRes.json();
-  } catch {
-    state.mcpStatus = { mode: "static_host", tokenOnServer: false };
+
+  if (justAuthed) {
+    if (document.getElementById("app") && !document.querySelector(".auth-connect-wait")) {
+      paintAuthConnectWait();
+    }
+    await syncAfterAuth();
+  } else {
+    try {
+      const statusRes = await fetch("/api/mcp/status");
+      if (!statusRes.ok) throw new Error(`mcp status ${statusRes.status}`);
+      state.mcpStatus = await statusRes.json();
+    } catch {
+      state.mcpStatus = { mode: "static_host", tokenOnServer: false };
+    }
+    await ensureHistoryCache();
   }
-  await ensureHistoryCache();
+
   state.intentSport.constraints.steps = loadWalkSteps();
+  applyMonthQueryParams();
   bindHash();
   render();
 }
@@ -674,10 +804,46 @@ function paint(html, bind, opts = {}) {
   const sheet = root.querySelector(".sheet");
   if (phone && sheet) phone.appendChild(sheet);
   if (y != null) window.scrollTo(0, y);
+  syncBusyVeil();
+}
+
+function busyVeilLabel() {
+  if (state.cartPushing) return "Додаємо товари в кошик Сільпо…";
+  if (state.shopResolving) return "Підвантажуємо зі Сільпо — зачекайте";
+  if (document.querySelector(".is-ui-frozen")) return "Зачекайте…";
+  return "";
+}
+
+/** Full-phone dim overlay (sibling of #app) so sticky chrome cannot escape. */
+function syncBusyVeil() {
+  const phone = document.getElementById("phone") || document.querySelector(".phone");
+  if (!phone) return;
+  const label = busyVeilLabel();
+  const busy = Boolean(label);
+  let veil = phone.querySelector(":scope > .ui-busy-veil");
+  if (!busy) {
+    if (veil) veil.hidden = true;
+    phone.classList.remove("is-busy-veil");
+    return;
+  }
+  if (!veil) {
+    veil = document.createElement("div");
+    veil.className = "ui-busy-veil";
+    veil.setAttribute("role", "presentation");
+    veil.innerHTML = `<div class="ui-busy-veil__card" role="status" aria-live="polite">
+      <span class="btn-busy__spin" aria-hidden="true"></span>
+      <p data-busy-label></p>
+    </div>`;
+    phone.appendChild(veil);
+  }
+  const text = veil.querySelector("[data-busy-label]");
+  if (text) text.textContent = label;
+  veil.hidden = false;
+  phone.classList.add("is-busy-veil");
 }
 
 /** Bind Express pulse tips/nav. `quiet` = month swap (no card rise / no count-from-0). */
-function bindHomePulseCard({ quiet = false } = {}) {
+function bindHomePulseCard({ quiet = false, skipRefit = false } = {}) {
   const goalBtn = $("#edit-month-goal");
   if (goalBtn) {
     goalBtn.onclick = (ev) => {
@@ -685,8 +851,9 @@ function bindHomePulseCard({ quiet = false } = {}) {
       openMonthGoalEditor(goalBtn);
     };
   }
+  // Overwrite-safe (like goalBtn.onclick): quiet rebind must not stack handlers on sibling card.
   root.querySelectorAll("[data-pulse-month-dir]").forEach((btn) => {
-    btn.addEventListener("click", (ev) => {
+    btn.onclick = (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
       const dir = Number(btn.dataset.pulseMonthDir) || 0;
@@ -694,18 +861,21 @@ function bindHomePulseCard({ quiet = false } = {}) {
       const nav = resolvePulseMonthNav(recs);
       const next = dir < 0 ? nav.prevKey : nav.nextKey;
       if (!next) return;
-      patchHomePulseMonth(next);
-    });
+      // Same path as chart pan: keep strip + rebase (±1). Drag right → prev → landDir 1.
+      const landDir = dir < 0 ? 1 : -1;
+      patchPulseMonthKeepSpark(next, { sport: false, landDir });
+    };
   });
   root.querySelectorAll("[data-pulse-month-now]").forEach((btn) => {
-    btn.addEventListener("click", (ev) => {
+    btn.onclick = (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
+      // May jump many months — full swap (not a single-segment pan land).
       patchHomePulseMonth(currentMonthKey());
-    });
+    };
   });
   root.querySelectorAll("[data-sport-month-dir]").forEach((btn) => {
-    btn.addEventListener("click", (ev) => {
+    btn.onclick = (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
       const dir = Number(btn.dataset.sportMonthDir) || 0;
@@ -713,15 +883,16 @@ function bindHomePulseCard({ quiet = false } = {}) {
       const nav = resolveSportPulseMonthNav(recs);
       const next = dir < 0 ? nav.prevKey : nav.nextKey;
       if (!next) return;
-      patchHomeSportPulseMonth(next);
-    });
+      const landDir = dir < 0 ? 1 : -1;
+      patchPulseMonthKeepSpark(next, { sport: true, landDir });
+    };
   });
   root.querySelectorAll("[data-sport-month-now]").forEach((btn) => {
-    btn.addEventListener("click", (ev) => {
+    btn.onclick = (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
       patchHomeSportPulseMonth(currentMonthKey());
-    });
+    };
   });
   if (!quiet) runHomeSpentCountUp();
   const goalSportBtn = $("#edit-sport-session-goal");
@@ -770,19 +941,78 @@ function bindHomePulseCard({ quiet = false } = {}) {
     if (quiet) sportRoot.classList.add("home-pulse--quiet");
   }
   scheduleWeekBadgeOverlapResolve(root);
+  // Quiet month nav used to skip width/fill refit → stale chartW + right void after ‹ ›.
+  if (!skipRefit) schedulePulseChartRefit();
   if (quiet) return;
-  const wantW = pulseChartWidth(".home-pulse--craft .home-pulse__spark-wrap");
-  const gotW = Number(pulseRoot?.dataset.chartW) || 0;
-  const wantSportW = pulseChartWidth(".home-pulse--sport .home-pulse__spark-wrap--sport");
-  const gotSportW = Number(sportRoot?.dataset.sportChartW) || 0;
-  const needRefit = Math.abs(wantW - gotW) > 2 || (sportRoot && Math.abs(wantSportW - gotSportW) > 2);
-  if (needRefit && !state._pulseChartRefit) {
-    state._pulseChartRefit = true;
-    void render();
-  } else {
-    state._pulseChartRefit = false;
-  }
   scheduleWeekBadgeOverlapResolve(root);
+}
+
+/** Card-local spark remount when baked width/fill ≠ live wrap (no full-home render). */
+function schedulePulseChartRefit() {
+  if (state._pulseChartRefit) return;
+  const craft = root.querySelector(".home-pulse--craft, .home-pulse--empty");
+  const sport = root.querySelector(".home-pulse--sport");
+  const craftWrap = craft?.querySelector(".home-pulse__spark-wrap");
+  const sportWrap = sport?.querySelector(".home-pulse__spark-wrap");
+  const wantCraft = pulseChartWidth(".home-pulse--craft .home-pulse__spark-wrap");
+  const gotCraft = Number(craft?.dataset.chartW) || 0;
+  const wantSport = pulseChartWidth(".home-pulse--sport .home-pulse__spark-wrap--sport");
+  const gotSport = Number(sport?.dataset.sportChartW) || 0;
+  const craftVoid =
+    craftWrap &&
+    sparkSegmentFillVoidPx(craftWrap, sparkSegLenses(craftWrap)[Number(craftWrap.dataset.sparkSegI) || 0], {
+      chartW: craftWrap.clientWidth || gotCraft,
+    }) > 4;
+  const sportVoid =
+    sportWrap &&
+    sparkSegmentFillVoidPx(sportWrap, sparkSegLenses(sportWrap)[Number(sportWrap.dataset.sparkSegI) || 0], {
+      chartW: sportWrap.clientWidth || gotSport,
+    }) > 4;
+  const craftBad = Boolean(craftWrap) && (Math.abs(wantCraft - gotCraft) > 2 || craftVoid);
+  const sportBad = Boolean(sportWrap) && (Math.abs(wantSport - gotSport) > 2 || sportVoid);
+  if (!craftBad && !sportBad) {
+    state._pulseChartRefit = false;
+    return;
+  }
+  state._pulseChartRefit = true;
+  requestAnimationFrame(() => {
+    try {
+      if (craftBad && craft?.isConnected) {
+        const key = craft.dataset.monthKey || state.pulseMonthKey || currentMonthKey();
+        state.pulseMonthKey = key;
+        const hasToken = Boolean(state.mcpStatus?.tokenOnServer);
+        const tmp = document.createElement("div");
+        tmp.innerHTML = homePulseHtml(hasToken).trim();
+        const nextEl = tmp.firstElementChild;
+        const prev = root.querySelector(".home-pulse--craft, .home-pulse--empty");
+        if (nextEl && prev) {
+          swapPulseCard(prev, nextEl, "home-pulse-craft", () =>
+            bindHomePulseCard({ quiet: true, skipRefit: true }),
+          );
+        }
+      }
+      if (sportBad && sport?.isConnected) {
+        const key = sport.dataset.sportMonthKey || state.sportPulseMonthKey || currentMonthKey();
+        state.sportPulseMonthKey = key;
+        const tmp = document.createElement("div");
+        tmp.innerHTML = homeSportPulseHtml().trim();
+        const nextEl = tmp.firstElementChild;
+        const prev = root.querySelector(".home-pulse--sport");
+        if (nextEl && prev) {
+          swapPulseCard(prev, nextEl, "home-pulse-sport", () => {
+            bindHomePulseCard({ quiet: true, skipRefit: true });
+            root.querySelectorAll(".home-pulse--sport [data-go]").forEach((b) => {
+              b.onclick = () => go(b.dataset.go);
+            });
+          });
+        }
+      }
+    } finally {
+      requestAnimationFrame(() => {
+        state._pulseChartRefit = false;
+      });
+    }
+  });
 }
 
 /** Soft card swap after pan / ‹ › — prefer named view-transition over hard cut. */
@@ -1111,14 +1341,55 @@ function applyPulseChromeFrom(prev, nextEl, { sport = false } = {}) {
   }
 }
 
+/** Parse spark segment lens CSV from wrap dataset. */
+function sparkSegLenses(wrap) {
+  return String(wrap?.dataset?.sparkSegLens || "")
+    .split(",")
+    .map((n) => Number(n))
+    .filter((n) => Number.isFinite(n) && n >= 0);
+}
+
+/**
+ * Right-void (px) if landed segment ink with current pitch is shorter than wrap.
+ * Pitch was baked for center month — shorter peeks leave empty space to card edge.
+ */
+function sparkSegmentFillVoidPx(wrap, segLen, { chartW, xPad = 2 } = {}) {
+  const pitch = Number(wrap?.dataset?.sparkPitch) || 0;
+  const w =
+    Number(chartW) ||
+    wrap?.clientWidth ||
+    Number(wrap?.closest(".home-pulse")?.dataset?.chartW) ||
+    Number(wrap?.closest(".home-pulse")?.dataset?.sportChartW) ||
+    0;
+  const len = Math.max(0, Number(segLen) || 0);
+  if (!(pitch > 0) || len < 2 || !(w > 0)) return 0;
+  const span = (len - 1) * pitch;
+  const target = Math.max(0, w - 2 * (Number(xPad) || 0));
+  return Math.max(0, target - span);
+}
+
+/** True when baked chartW ≠ live wrap, or land month would leave a right void. */
+function sparkKeepSparkUnsafe(wrap, landDir, { voidPx = 4 } = {}) {
+  if (!wrap) return true;
+  const card = wrap.closest(".home-pulse");
+  const baked =
+    Number(card?.dataset?.chartW) || Number(card?.dataset?.sportChartW) || 0;
+  const live = wrap.clientWidth || 0;
+  if (live > 200 && baked > 0 && Math.abs(live - baked) > 2) return true;
+  const lenses = sparkSegLenses(wrap);
+  let segI = Number(wrap.dataset.sparkSegI);
+  if (!Number.isFinite(segI)) segI = 0;
+  const nextI = landDir > 0 ? segI - 1 : segI + 1;
+  if (nextI < 0 || nextI >= lenses.length) return true;
+  const fillW = live > 200 ? live : baked;
+  return sparkSegmentFillVoidPx(wrap, lenses[nextI], { chartW: fillW }) > voidPx;
+}
+
 /** After pan land: shift restX + segment cursor; keep same SVG strip (no chart remount jump). */
 function rebaseSparkWrapAfterLand(wrap, dir) {
   if (!wrap) return false;
   const pitch = Number(wrap.dataset.sparkPitch) || 0;
-  const lenses = String(wrap.dataset.sparkSegLens || "")
-    .split(",")
-    .map((n) => Number(n))
-    .filter((n) => Number.isFinite(n) && n >= 0);
+  const lenses = sparkSegLenses(wrap);
   let segI = Number(wrap.dataset.sparkSegI);
   if (!Number.isFinite(segI)) segI = 0;
   const nextI = dir > 0 ? segI - 1 : segI + 1;
@@ -1171,8 +1442,10 @@ function syncPulseBadgeOverFrom(nextEl, liveRoot) {
 }
 
 /**
- * Pan commit: update chrome to neighbor month, keep translating strip (no spark remount).
- * ‹ › month buttons still use full card swap.
+ * Neighbor-month commit shared by chart pan and ‹ ›: keep translating strip when safe.
+ * Remount with already-built nextEl when pitch would leave a right void or width is stale
+ * (avoids double homePulseHtml + empty gap to card edge).
+ * «повернутись» still uses full card swap (multi-month jump).
  */
 function patchPulseMonthKeepSpark(nextKey, { sport = false, landDir = 1 } = {}) {
   if (!nextKey) return;
@@ -1191,11 +1464,23 @@ function patchPulseMonthKeepSpark(nextKey, { sport = false, landDir = 1 } = {}) 
     return;
   }
   const wrap = prev.querySelector(".home-pulse__spark-wrap");
+  const afterBind = () => {
+    bindHomePulseCard({ quiet: true });
+    if (sport) {
+      root.querySelectorAll(".home-pulse--sport [data-go]").forEach((b) => {
+        b.onclick = () => go(b.dataset.go);
+      });
+    }
+  };
+  // Prefer remount with nextEl (correct pitch for landed month) over keep-spark void.
+  if (sparkKeepSparkUnsafe(wrap, landDir)) {
+    swapPulseCard(prev, nextEl, sport ? "home-pulse-sport" : "home-pulse-craft", afterBind);
+    return;
+  }
   applyPulseChromeFrom(prev, nextEl, { sport });
   const rebased = rebaseSparkWrapAfterLand(wrap, landDir);
   if (!rebased) {
-    if (sport) patchHomeSportPulseMonth(nextKey);
-    else patchHomePulseMonth(nextKey);
+    swapPulseCard(prev, nextEl, sport ? "home-pulse-sport" : "home-pulse-craft", afterBind);
     return;
   }
   syncPulseBadgeOverFrom(nextEl, prev);
@@ -1203,12 +1488,7 @@ function patchPulseMonthKeepSpark(nextKey, { sport = false, landDir = 1 } = {}) 
   prev.classList.remove("is-spark-panning");
   wrap?.classList.remove("is-panning");
   refreshSparkEdgeClasses(wrap);
-  bindHomePulseCard({ quiet: true });
-  if (sport) {
-    root.querySelectorAll(".home-pulse--sport [data-go]").forEach((b) => {
-      b.onclick = () => go(b.dataset.go);
-    });
-  }
+  afterBind();
 }
 
 /** Swap only Express pulse card — keep home chrome, skip full-screen enter flash. */
@@ -1253,13 +1533,17 @@ function patchShopDock(vm) {
   const n = okLines(vm).length;
   const btn = dock.querySelector("#print");
   if (btn && !state.confirmed) {
+    if (state.shopResolving || state.cartPushing) {
+      btn.disabled = true;
+      return;
+    }
     btn.disabled = !n;
     const label = btn.querySelector(".dock-cta__label");
     const sumEl = btn.querySelector(".dock-cta__sum");
-    if (label && sumEl) {
+    if (label && sumEl && !btn.classList.contains("is-busy")) {
       label.textContent = `Погодити ${n || "0"}`;
       sumEl.textContent = money(okSum(vm));
-    } else {
+    } else if (!btn.classList.contains("is-busy")) {
       btn.textContent = `Погодити ${n || "0"}`;
     }
   }
@@ -1415,6 +1699,10 @@ function amountControlHtml(l, checked) {
     </div>`;
 }
 
+function shopListLocked() {
+  return Boolean(state.shopResolving || state.cartPushing);
+}
+
 function bindQtyButtons(scope = root) {
   scope.querySelectorAll("[data-qty-delta]").forEach((btn) => {
     if (btn.dataset.qtyBound) return;
@@ -1422,6 +1710,7 @@ function bindQtyButtons(scope = root) {
     btn.onclick = (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
+      if (shopListLocked()) return;
       applyQty(btn.dataset.qtyRole, Number(btn.dataset.qtyDelta));
     };
   });
@@ -1462,6 +1751,11 @@ function applyQty(role, delta) {
     if (amt) amt.textContent = result.line.amount || "";
     const priceEl = art.querySelector(".sku-price");
     if (priceEl && result.line.price != null) priceEl.textContent = money(result.line.price);
+  }
+  if (state.confirmed) {
+    state.confirmed = false;
+    paintShop(state.intentShop, state.shopVm, false, { enter: false, keepScroll: true });
+    return;
   }
   patchShopDock(vm);
   patchShopProgress(vm);
@@ -1559,6 +1853,8 @@ function placeFilterUa(place) {
 
 function applyAccept(role, on) {
   state.accepted = { ...state.accepted, [role]: on };
+  const leftConfirmed = state.confirmed;
+  if (leftConfirmed) state.confirmed = false;
   const hadNudge = Boolean($("#shop-pantry-nudge"));
   const nextNudge = shopPantryNudge(
     state.shopVm?.lines || [],
@@ -1567,8 +1863,8 @@ function applyAccept(role, on) {
     Date.now(),
     shopPantryNudgeOpts(),
   );
-  // Pantry header derives from accepted — remount so nudge + covered row chips stay honest.
-  if (hadNudge || nextNudge) {
+  // Remount when pantry nudge changes or after leaving confirmed (dock CTA must update).
+  if (hadNudge || nextNudge || leftConfirmed) {
     paintShop(state.intentShop, state.shopVm, false, { enter: false, keepScroll: true });
     return;
   }
@@ -1613,6 +1909,20 @@ function setPrimaryBusy(btn, busy, label = "Завантаження…") {
   btn.classList.remove("is-busy");
   if (idle) btn.textContent = idle;
   delete btn.dataset.labelIdle;
+}
+
+/** Freeze interactive shell while a confirm CTA waits for the next screen. */
+function setUiFrozen(el, frozen) {
+  if (!el) return;
+  el.classList.toggle("is-ui-frozen", Boolean(frozen));
+  if (frozen) el.setAttribute("aria-busy", "true");
+  else el.removeAttribute("aria-busy");
+  syncBusyVeil();
+}
+
+function setConfirmBusy(btn, busy, label, freezeRoot) {
+  setPrimaryBusy(btn, busy, label);
+  setUiFrozen(freezeRoot || btn?.closest("section") || root, busy);
 }
 
 function dayResolveWaitHtml() {
@@ -1965,6 +2275,154 @@ function cartPushProductsFromVm(vm) {
     .filter((p) => p.productId && p.companyId);
 }
 
+function clearCheckoutLinks() {
+  state.checkoutUrl = "";
+  state.checkoutWebUrl = "";
+  state.checkoutMobileUrl = "";
+}
+
+const SILPO_WEB_FALLBACK = "https://silpo.ua";
+
+function isCoarseMobileClient() {
+  try {
+    if (globalThis.matchMedia?.("(pointer: coarse)").matches) return true;
+  } catch {
+    /* ignore */
+  }
+  const ua = globalThis.navigator?.userAgent || "";
+  return /Android|iPhone|iPad|iPod/i.test(ua);
+}
+
+function silpoWebCartUrl() {
+  return state.checkoutWebUrl || state.checkoutUrl || SILPO_WEB_FALLBACK;
+}
+
+function silpoMobileCartUrl() {
+  return state.checkoutMobileUrl || "";
+}
+
+/** Open blank tab under current user gesture (before any await). */
+function openBlankHandoffTab() {
+  try {
+    return window.open("about:blank", "_blank");
+  } catch {
+    return null;
+  }
+}
+
+function closeHandoffTab(tab) {
+  if (!tab || tab.closed) return;
+  try {
+    tab.close();
+  } catch {
+    /* ignore */
+  }
+}
+
+function navigateHandoffTab(tab, url) {
+  const target = url || SILPO_WEB_FALLBACK;
+  if (tab && !tab.closed) {
+    try {
+      tab.location.href = target;
+      return true;
+    } catch {
+      closeHandoffTab(tab);
+    }
+  }
+  return false;
+}
+
+/** Open real Silpo cart: web by default; optional native/mobile checkout link. */
+function openSilpoCart({ preferApp = false } = {}) {
+  const mobile = silpoMobileCartUrl();
+  const target =
+    preferApp && mobile ? mobile : silpoWebCartUrl() || SILPO_WEB_FALLBACK;
+  // Prefer real <a> navigation — survives popup blockers better than window.open+features.
+  try {
+    const a = document.createElement("a");
+    a.href = target;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    return true;
+  } catch {
+    try {
+      const opened = window.open(target, "_blank");
+      if (opened) return true;
+    } catch {
+      /* ignore */
+    }
+  }
+  toastAction("Відкрийте кошик Сільпо", "silpo.ua", () => {
+    window.open(target, "_blank");
+  });
+  return false;
+}
+
+function rememberCheckoutLinks(data = {}) {
+  const web = data.checkoutWeb || "";
+  const mobile = data.checkoutMobile || "";
+  state.checkoutWebUrl = web || "";
+  state.checkoutMobileUrl = mobile || "";
+  /* Web CTA always opens site (or MCP web link); never a mobile deep link. */
+  state.checkoutUrl = web || SILPO_WEB_FALLBACK;
+  if (state.shopVm) {
+    state.shopVm = {
+      ...state.shopVm,
+      checkout: state.checkoutUrl,
+      checkoutWeb: state.checkoutWebUrl || null,
+      checkoutMobile: state.checkoutMobileUrl || null,
+    };
+  }
+}
+
+function offerSilpoCartHandoff({ toastMsg, alreadyOpened = false } = {}) {
+  try {
+    if (!alreadyOpened) openSilpoCart({ preferApp: false });
+    const mobile = silpoMobileCartUrl();
+    if (isCoarseMobileClient() && mobile) {
+      toastAction(toastMsg || "Кошик оновлено · дивіться на silpo.ua", "У застосунку", () => {
+        openSilpoCart({ preferApp: true });
+      });
+    } else if (toastMsg) {
+      toast(toastMsg);
+    }
+  } catch (e) {
+    console.warn("handoff", e);
+    if (toastMsg) toast(toastMsg);
+  }
+}
+
+function apiFetch(url, init = {}) {
+  return fetch(url, { credentials: "same-origin", ...init });
+}
+
+async function refreshMcpStatusQuiet({ clearOnFail = false } = {}) {
+  try {
+    const r = await apiFetch("/api/mcp/status");
+    if (!r.ok) throw new Error(`status ${r.status}`);
+    state.mcpStatus = await r.json();
+  } catch {
+    if (clearOnFail) {
+      state.mcpStatus = { ...(state.mcpStatus || {}), tokenOnServer: false, mode: "fixture" };
+    }
+  }
+}
+
+function forceSilpoLogin(message) {
+  toast(message || "Увійдіть у Сільпо");
+  try {
+    sessionStorage.setItem("silpo.returnHash", "#/shop");
+  } catch {
+    /* ignore */
+  }
+  state.mcpStatus = { ...(state.mcpStatus || {}), tokenOnServer: false };
+  location.href = "/auth/start";
+}
+
 /** Core + A: write accepted SKUs into live Silpo cart (merge), open checkout link. */
 async function pushShopCartToSilpo() {
   if (state.cartPushing) return;
@@ -1975,64 +2433,66 @@ async function pushShopCartToSilpo() {
     return;
   }
 
-  if (state.confirmed && state.checkoutUrl) {
-    window.open(state.checkoutUrl, "_blank", "noopener");
-    return;
-  }
+  // Merge-push always (incl. «Додати ще»). Server sends only delta — no double of already-present SKUs.
+  // Open under user gesture BEFORE any await — otherwise popup blockers kill handoff.
+  const handoffTab = openBlankHandoffTab();
 
-  await refreshMcpStatusQuiet();
+  await refreshMcpStatusQuiet({ clearOnFail: true });
   if (!state.mcpStatus?.tokenOnServer) {
-    toast("Увійдіть у Сільпо, щоб додати в кошик");
-    try {
-      sessionStorage.setItem("silpo.returnHash", "#/shop");
-    } catch {
-      /* ignore */
-    }
-    location.href = "/auth/start";
+    closeHandoffTab(handoffTab);
+    forceSilpoLogin("Увійдіть у Сільпо, щоб додати в кошик");
     return;
   }
 
   const products = cartPushProductsFromVm(vm);
   if (!products.length) {
+    closeHandoffTab(handoffTab);
     toast("Немає live SKU — оновіть список після входу в Сільпо");
     return;
   }
 
   state.cartPushing = true;
+  syncBusyVeil();
   paintShop(state.intentShop, state.shopVm, false, { enter: false, keepScroll: true });
   try {
-    const r = await fetch("/api/cart/push", {
+    const r = await apiFetch("/api/cart/push", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ products, merge: true }),
     });
-    const data = await r.json().catch(() => ({}));
+    let data = {};
+    try {
+      data = await r.json();
+    } catch {
+      data = {};
+    }
     if (r.status === 401 || data.error === "login_required") {
-      toast(data.message || "Увійдіть у Сільпо");
-      location.href = data.login || "/auth/start";
+      closeHandoffTab(handoffTab);
+      forceSilpoLogin(data.message || "Увійдіть у Сільпо");
       return;
     }
     if (!r.ok || !data.ok) {
+      closeHandoffTab(handoffTab);
       const why =
         data.message ||
         ({
           no_skus: "Немає валідних SKU",
-          cart_context_incomplete: "Немає слота/гілки в кошику Сільпо",
+          cart_context_incomplete: "Немає слота/гілки в кошику Сільпо — відкрийте застосунок Сільпо і оберіть магазин/слот, потім спробуйте знову",
           cart_write_failed: "Сільпо відхилив запис у кошик",
-          mcp_init_failed: "MCP недоступний",
+          mcp_init_failed: "MCP недоступний або сесія протухла — увійдіть знову",
           tools_missing: "Немає tool запису кошика",
         }[data.error] ||
           data.error ||
-          "не вдалося додати в кошик");
+          `не вдалося додати в кошик (${r.status})`);
       toast(why);
+      if (data.error === "mcp_init_failed" && data.http === 401) {
+        forceSilpoLogin(why);
+      }
       return;
     }
 
     state.confirmed = true;
-    state.checkoutUrl = data.checkout || "";
-    if (state.shopVm) {
-      state.shopVm = { ...state.shopVm, checkout: state.checkoutUrl || state.shopVm.checkout || null };
-    }
+    rememberCheckoutLinks(data);
     const sportLinked =
       Boolean(state.sportHandoff) ||
       (state.extraQueries || []).some((q) => q?.from === "sport_day");
@@ -2042,32 +2502,24 @@ async function pushShopCartToSilpo() {
     const skipped = Number(data.skipped) || 0;
     const already = Number(data.already) || 0;
     const added = Number(data.added) || 0;
+    let toastMsg;
     if (added === 0 && already > 0) {
-      toast(data.message || `Уже в кошику · ${already} поз. без змін`);
+      toastMsg = data.message || `Уже в кошику · ${already} поз. без змін`;
     } else {
       const bits = [`Додано ${added}`];
       if (already) bits.push(`вже було ${already}`);
       if (skipped) bits.push(`пропущено ${skipped}`);
-      toast(`${bits.join(" · ")} (долив)`);
+      toastMsg = `${bits.join(" · ")} (долив)`;
     }
-    if (state.checkoutUrl) {
-      window.open(state.checkoutUrl, "_blank", "noopener");
-    } else {
-      toast("Кошик оновлено — відкрийте застосунок Сільпо");
-    }
-  } catch {
-    toast("Помилка відправки в кошик Сільпо");
+    const opened = navigateHandoffTab(handoffTab, silpoWebCartUrl());
+    offerSilpoCartHandoff({ toastMsg, alreadyOpened: opened });
+  } catch (e) {
+    closeHandoffTab(handoffTab);
+    console.warn("cart_push_client", e);
+    toast(`Помилка відправки в кошик Сільпо${e?.message ? ` · ${e.message}` : ""}`);
   } finally {
     state.cartPushing = false;
     render();
-  }
-}
-
-async function refreshMcpStatusQuiet() {
-  try {
-    state.mcpStatus = await fetch("/api/mcp/status").then((r) => r.json());
-  } catch {
-    /* keep previous */
   }
 }
 
@@ -2183,7 +2635,7 @@ async function render() {
       ? `<span class="home-nav__mcp is-on" role="status"><span class="home-nav__mcp-dot" aria-hidden="true"></span>підключено</span>`
       : staticHost
         ? `<span class="home-nav__mcp is-off" role="status" title="Живий логін Сільпо — локально: node server.mjs">демо</span>`
-        : `<a class="home-nav__mcp is-off" href="/auth/start">Увійти</a>`;
+        : `<a class="home-nav__mcp is-off" href="/auth/start" data-auth-start>Увійти</a>`;
     paint(
       `
       <section class="home-hero home-hero--need" aria-label="СільпоSE">
@@ -2191,7 +2643,7 @@ async function render() {
         <header class="home-nav">
           <div class="home-nav__brand-block">
             ${brandMarkHtml({ product: "sportExpress", size: "hero", tag: "span", className: "home-nav__brand" })}
-            <span class="home-nav__whisper">думаємо про ваш ритм</span>
+            <span class="home-nav__whisper">два ритуали · один ритм</span>
           </div>
           ${sessionChip}
         </header>
@@ -2200,7 +2652,7 @@ async function render() {
           <button type="button" class="home-ritual" data-go="sport" role="listitem">
             <span class="home-ritual__copy">
               <strong class="home-ritual__title">${brandMarkHtml({ product: "sport", size: "card" })}</strong>
-              <span class="home-ritual__desc">Заняття · раціон з чеків</span>
+              <span class="home-ritual__desc">Сесія сьогодні · страви з полиці</span>
             </span>
             <span class="home-stat__cta">
               Пігнали
@@ -2213,7 +2665,7 @@ async function render() {
           <button type="button" class="home-ritual" data-go="shop" role="listitem">
             <span class="home-ritual__copy">
               <strong class="home-ritual__title">${brandMarkHtml({ product: "express", size: "card" })}</strong>
-              <span class="home-ritual__desc">Чеклист з чеків · заміни · групи</span>
+              <span class="home-ritual__desc">Список з чеків · долив у кошик</span>
             </span>
             <span class="home-stat__cta">
               Замовити
@@ -2236,6 +2688,16 @@ async function render() {
       </section>
     `,
       () => {
+        const authStart = root.querySelector("[data-auth-start]");
+        if (authStart) {
+          authStart.addEventListener("click", () => {
+            try {
+              sessionStorage.setItem("silpo.returnHash", location.hash || "#/");
+            } catch {
+              /* ignore */
+            }
+          });
+        }
         root.querySelectorAll("[data-go]").forEach((b) => {
           b.onclick = () => go(b.dataset.go);
         });
@@ -2409,8 +2871,7 @@ function homeSportPulseHtml() {
   });
   const seriesStrip = strip.series;
   const curStart = strip.curStartIdx;
-  const refLen = Math.max(2, curSeries.length, ...(strip.segmentLens || []));
-  const pitch = (chartW - 2 * xPad) / (refLen - 1);
+  const pitch = sparkPanelPitch(chartW, xPad, curSeries.length);
   const stripW =
     seriesStrip.length > 1 ? Math.round(2 * xPad + pitch * (seriesStrip.length - 1)) : chartW;
   const sparkRestX = Math.round(curStart * pitch);
@@ -2436,6 +2897,10 @@ function homeSportPulseHtml() {
     maxKcal: yMax.kcal,
     maxSessions: yMax.sessions,
   });
+  const sparkCutWeek = monthKey === currentMonthKey() ? sparkTodayWeekStart() : "";
+  const sparkPastEnd = sparkCutWeek ? sparkPastEndIndex(seriesStrip, sparkCutWeek) : seriesStrip.length - 1;
+  const sportLineSplit = sparkSplitPaths((geom.sport || geom.peer)?.coords, sparkPastEnd);
+  const foodLineSplit = sparkSplitPaths(geom.coords, sparkPastEnd);
   const orient = sportOrientirModel({
     ritualDays: model.ritualDays || card.sessionsDone,
     sessionScore: model.sessionScore,
@@ -2716,6 +3181,8 @@ function homeSportPulseHtml() {
       const viewX = Number(c.x) - sparkRestX;
       const atStart = c.i === 0 || viewX < 40;
       const atEnd = c.i === stripLastIdx || viewX > chartW - 40;
+      const isFuture =
+        Boolean(sparkCutWeek) && !row.prior && String(row.weekStart || "") > sparkCutWeek;
       const left =
         atStart && c.i === 0
           ? 0
@@ -2728,6 +3195,7 @@ function homeSportPulseHtml() {
         "home-pulse__week-tick",
         "home-pulse__week-tick--day",
         row.prior || !inCur ? "is-prior" : "",
+        isFuture ? "is-future" : "",
         atStart ? "is-edge-start" : "",
         atEnd ? "is-edge-end" : "",
         inCur && hotIds.has(curIdx) ? "is-hot" : "",
@@ -2844,10 +3312,12 @@ function homeSportPulseHtml() {
               ${chartGrid}
               ${(geom.sport || geom.peer)?.area ? `<path class="home-pulse__ribbon-fill home-pulse__ribbon-fill--sport" d="${(geom.sport || geom.peer).area}" fill="url(#sportSessRibbonFill)" />` : ""}
               ${geom.area ? `<path class="home-pulse__ribbon-fill home-pulse__ribbon-fill--food" d="${geom.area}" fill="url(#sportFoodRibbonFill)" />` : ""}
-              ${(geom.sport || geom.peer)?.path ? `<path class="home-pulse__ribbon-glow home-pulse__ribbon-glow--sport" d="${(geom.sport || geom.peer).path}" fill="none" pathLength="1" />` : ""}
-              ${geom.path ? `<path class="home-pulse__ribbon-glow home-pulse__ribbon-glow--food" d="${geom.path}" fill="none" pathLength="1" />` : ""}
-              ${(geom.sport || geom.peer)?.path ? `<path class="home-pulse__ribbon-line home-pulse__ribbon-line--sport" d="${(geom.sport || geom.peer).path}" fill="none" pathLength="1" />` : ""}
-              ${geom.path ? `<path class="home-pulse__ribbon-line home-pulse__ribbon-line--food" d="${geom.path}" fill="none" pathLength="1" />` : ""}
+              ${sportLineSplit.past ? `<path class="home-pulse__ribbon-glow home-pulse__ribbon-glow--sport" d="${sportLineSplit.past}" fill="none" pathLength="1" />` : ""}
+              ${foodLineSplit.past ? `<path class="home-pulse__ribbon-glow home-pulse__ribbon-glow--food" d="${foodLineSplit.past}" fill="none" pathLength="1" />` : ""}
+              ${sportLineSplit.past ? `<path class="home-pulse__ribbon-line home-pulse__ribbon-line--sport" d="${sportLineSplit.past}" fill="none" pathLength="1" />` : ""}
+              ${sportLineSplit.future ? `<path class="home-pulse__ribbon-line home-pulse__ribbon-line--sport home-pulse__ribbon-line--future" d="${sportLineSplit.future}" fill="none" />` : ""}
+              ${foodLineSplit.past ? `<path class="home-pulse__ribbon-line home-pulse__ribbon-line--food" d="${foodLineSplit.past}" fill="none" pathLength="1" />` : ""}
+              ${foodLineSplit.future ? `<path class="home-pulse__ribbon-line home-pulse__ribbon-line--food home-pulse__ribbon-line--future" d="${foodLineSplit.future}" fill="none" />` : ""}
               ${marksSvg}
             </svg>
             ${dayBadgesHtml ? `<div class="home-pulse__week-badges" aria-label="Заняття і калорії по тижнях">${dayBadgesHtml}</div>` : ""}
@@ -3142,6 +3612,38 @@ function smoothSparkPath(coords) {
   return d;
 }
 
+function sparkTodayWeekStart() {
+  return weekStartISO(new Date().toISOString()) || "";
+}
+
+/** Inclusive index of last past/current week on strip (−1 if none). */
+function sparkPastEndIndex(series, cutWeek = sparkTodayWeekStart()) {
+  const rows = Array.isArray(series) ? series : [];
+  if (!rows.length) return -1;
+  if (!cutWeek) return rows.length - 1;
+  let last = -1;
+  for (let i = 0; i < rows.length; i++) {
+    const ws = String(rows[i]?.weekStart || rows[i]?.day || "");
+    if (!ws) continue;
+    if (rows[i]?.prior || ws <= cutWeek) last = i;
+  }
+  return last;
+}
+
+/** Solid path through today + dashed remainder to month end. */
+function sparkSplitPaths(coords, pastEndIdx) {
+  const all = Array.isArray(coords) ? coords : [];
+  if (!all.length) return { past: "", future: "" };
+  const full = smoothSparkPath(all);
+  const end = Math.max(0, Math.min(all.length - 1, Number(pastEndIdx)));
+  if (pastEndIdx < 0) return { past: "", future: full };
+  if (end >= all.length - 1) return { past: full, future: "" };
+  return {
+    past: smoothSparkPath(all.slice(0, end + 1)),
+    future: smoothSparkPath(all.slice(end)),
+  };
+}
+
 /**
  * Neighbor-month chart panel for pan peek (SVG + badges + axis).
  * Non-interactive — fills vacated space while dragging; no tip node.
@@ -3320,7 +3822,7 @@ function pulseChartGridSvg(geom, { vertical = true, verticalAt = null } = {}) {
   return `${hLines}${v}`;
 }
 
-/** Card / spark-wrap width so ribbon ink spans full card (pad cancelled by CSS bleed). */
+/** Live spark-wrap width so ribbon ink spans the card (story cards are width:100%, no bleed). */
 function pulseChartWidth(preferSel) {
   if (preferSel) {
     const scoped = document.querySelector(preferSel);
@@ -4576,7 +5078,7 @@ function homePulseHtml(hasToken) {
   const monthWeeks = seriesForChart.filter((s) => !s.prior);
   const weekPace =
     pulse.goalUah > 0 ? pulse.goalUah / Math.max(4, monthWeeks.length || 4) : 0;
-  const chartW = pulseChartWidth();
+  const chartW = pulseChartWidth(".home-pulse--craft .home-pulse__spark-wrap");
   const xPad = 2;
   const { older: olderKeys, newer: newerKeys } = neighborMonthKeys(nav.keys, monthKey, 2);
   const strip = buildSparkPanStripFromNeighbors({
@@ -4586,8 +5088,7 @@ function homePulseHtml(hasToken) {
   });
   const seriesStrip = strip.series;
   const curStart = strip.curStartIdx;
-  const refLen = Math.max(2, seriesForChart.length, ...(strip.segmentLens || []));
-  const pitch = (chartW - 2 * xPad) / (refLen - 1);
+  const pitch = sparkPanelPitch(chartW, xPad, seriesForChart.length);
   const stripW =
     seriesStrip.length > 1 ? Math.round(2 * xPad + pitch * (seriesStrip.length - 1)) : chartW;
   const sharedMax = sparkSharedYMax(seriesStrip, {
@@ -4595,6 +5096,9 @@ function homePulseHtml(hasToken) {
     weekPace,
   });
   const geom = pulseRibbonGeom(seriesStrip, stripW, 108, 0, { xPad, maxUah: sharedMax });
+  const sparkCutWeek = monthKey === currentMonthKey() ? sparkTodayWeekStart() : "";
+  const sparkPastEnd = sparkCutWeek ? sparkPastEndIndex(seriesStrip, sparkCutWeek) : seriesStrip.length - 1;
+  const spendLineSplit = sparkSplitPaths(geom.coords, sparkPastEnd);
   const sparkRestX = Math.round(curStart * pitch);
   const sparkPeekLeft = sparkRestX;
   const sparkPeekRight = Math.max(0, stripW - sparkRestX - chartW);
@@ -4757,11 +5261,13 @@ function homePulseHtml(hasToken) {
       const curIdx = c.i - curStart;
       const atStart = c.i === 0;
       const atEnd = c.i === stripLastIdx;
+      const isFuture = Boolean(sparkCutWeek) && !row?.prior && String(ws) > sparkCutWeek;
       const left = atStart ? 0 : atEnd ? 100 : geom.w > 0 ? (c.x / geom.w) * 100 : 0;
       const cls = [
         "home-pulse__week-tick",
         "home-pulse__week-tick--day",
         row?.prior ? "is-prior" : "",
+        isFuture ? "is-future" : "",
         atStart ? "is-edge-start" : "",
         atEnd ? "is-edge-end" : "",
         inCur && hotIds.has(curIdx) ? "is-hot" : "",
@@ -5034,8 +5540,9 @@ function homePulseHtml(hasToken) {
               </defs>
               ${chartGrid}
               ${geom.area ? `<path class="home-pulse__ribbon-fill" d="${geom.area}" fill="url(#${ribbonFillId})" />` : ""}
-              ${geom.path ? `<path class="home-pulse__ribbon-glow" d="${geom.path}" fill="none" pathLength="1" />` : ""}
-              ${geom.path ? `<path class="home-pulse__ribbon-line" d="${geom.path}" fill="none" pathLength="1" />` : ""}
+              ${spendLineSplit.past ? `<path class="home-pulse__ribbon-glow" d="${spendLineSplit.past}" fill="none" pathLength="1" />` : ""}
+              ${spendLineSplit.past ? `<path class="home-pulse__ribbon-line" d="${spendLineSplit.past}" fill="none" pathLength="1" />` : ""}
+              ${spendLineSplit.future ? `<path class="home-pulse__ribbon-line home-pulse__ribbon-line--future" d="${spendLineSplit.future}" fill="none" />` : ""}
               ${marksSvg}
             </svg>
             ${weekBadgesHtml}
@@ -5521,7 +6028,7 @@ function patchDayRitualUi() {
     partial: sessionPartialToday,
     live,
   });
-  /* Soft jump to plates — player no longer carries «До тарілок» after complete. */
+  /* Soft jump to meals — player no longer carries «До страв» after complete. */
   const platesChip = `<button type="button" class="ghost ghost--sheet day-ritual__chip" id="toPlates">раціон ↓</button>`;
   actions.innerHTML = `${chipHtml}${platesChip}`;
   bindDayRitualNav(strip);
@@ -6538,7 +7045,7 @@ async function renderSport(seq) {
         $("#surveyNext").onclick = () => {
           const btn = $("#surveyNext");
           if (btn?.dataset.busy === "1") return;
-          setPrimaryBusy(btn, true, "Збираємо день…");
+          setConfirmBusy(btn, true, "Збираємо день…");
           saveSportSurvey(state.surveyDraft);
           state.surveyDraft = null;
           state.screen = "day";
@@ -6954,12 +7461,15 @@ async function renderSport(seq) {
           };
         });
         $("#saveProfile").onclick = () => {
+          const btn = $("#saveProfile");
+          if (btn?.dataset.busy === "1") return;
           syncDraft();
           const next = normalizeSportProfile(state.profileDraft);
           if (!next.sex || next.age == null || next.heightCm == null || next.weightKg == null || !next.bodyGoal) {
             toast("Заповніть стать, вік, зріст, вагу і ціль");
             return;
           }
+          setConfirmBusy(btn, true, "Зберігаємо…");
           const saved = saveSportProfile(next);
           state.profileDraft = null;
           state._sportProfilePolishOnce = false;
@@ -7089,7 +7599,7 @@ async function renderSport(seq) {
       $("#next").onclick = () => {
         const btn = $("#next");
         if (btn?.dataset.busy === "1") return;
-        setPrimaryBusy(btn, true, "Збираємо день…");
+        setConfirmBusy(btn, true, "Збираємо день…");
         state.sportProgramPickerOpen = false;
         enterSportDay();
       };
@@ -7227,8 +7737,19 @@ function productCardHtml(i, vm, loading, pantryRoles = []) {
             .join(""),
         })
       : "";
+  const resolving = Boolean(state.shopResolving);
   return `
-        <div class="shop-checklist" id="shop-checklist">
+        <div class="shop-checklist${resolving ? " shop-checklist--resolving" : ""}" id="shop-checklist"${
+          resolving ? ` aria-busy="true" inert` : ""
+        }>
+          ${
+            resolving
+              ? `<div class="shop-list-wait" role="status" aria-live="polite">
+            <span class="btn-busy__spin" aria-hidden="true"></span>
+            <p>Зачекайте: підвантажуємо зі Сільпо — список ще не для кліків</p>
+          </div>`
+              : ""
+          }
           ${programBlock}
           ${
             groups.length
@@ -7998,7 +8519,9 @@ function paintShop(i, vm, loading, opts = {}) {
     </div>`;
   paint(
     `
-    <section class="shop-flow shop-flow--checkout" aria-label="СільпоExpress">
+    <section class="shop-flow shop-flow--checkout${
+      state.cartPushing || state.shopResolving ? " is-ui-frozen" : ""
+    }" aria-label="СільпоExpress"${state.cartPushing || state.shopResolving ? ` aria-busy="true"` : ""}>
     <header class="sport-chrome sport-chrome--inline shop-chrome shop-chrome--express shop-chrome--compact">
       <div class="sport-chrome-top">
         <button type="button" class="back" id="back" aria-label="Назад">←</button>
@@ -8028,12 +8551,18 @@ function paintShop(i, vm, loading, opts = {}) {
         okCount: okLines(vm).length,
         sumLabel: money(okSum(vm)),
         loading,
+        resolving: state.shopResolving && !state.cartPushing && !state.confirmed,
         confirmed: state.confirmed,
         pushing: state.cartPushing,
+        checkoutHref: state.confirmed ? silpoWebCartUrl() : "",
       })}
       ${
-        state.confirmed && (state.checkoutUrl || vm?.checkout)
-          ? `<p class="muted shop-dock-checkout">Додано в кошик Сільпо (долив). <a href="${esc(state.checkoutUrl || vm.checkout)}" target="_blank" rel="noopener">Відкрити оформлення</a></p>`
+        state.confirmed
+          ? `<p class="muted shop-dock-checkout">У кошику Сільпо (долив, без подвоєння). <a href="${esc(silpoWebCartUrl())}" target="_blank" rel="noopener noreferrer" data-silpo-web-cart>Відкрити на silpo.ua</a>${
+              silpoMobileCartUrl()
+                ? ` · <button type="button" class="linkish" data-silpo-app-cart>У застосунку</button>`
+                : ""
+            }</p>`
           : ""
       }
     </div>`
@@ -8068,8 +8597,10 @@ async function renderShop(seq) {
       extraQueries: state.extraQueries,
       confirmed: state.confirmed,
     };
+    state.shopResolving = true;
+    const resolveGen = (state.shopResolveGen = (state.shopResolveGen || 0) + 1);
     // Instant local plan so горизонт/стеля update before MCP returns.
-    // Avoids stale list + «0 погоджено» while accepted was cleared.
+    // Dock stays locked (resolving) until live resolve settles.
     if (state.kb && state.shelf && i.surface === "shopping") {
       try {
         vm = localShopVm(i, resolveOpts);
@@ -8089,13 +8620,20 @@ async function renderShop(seq) {
       const [, live] = await Promise.all([histP, resolveP]);
       vm = live;
     } catch (e) {
-      if (e?.name === "AbortError") return;
+      if (e?.name === "AbortError") {
+        /* Newer resolve owns shopResolving — do not clear. */
+        return;
+      }
+      if (state.shopResolveGen === resolveGen) state.shopResolving = false;
       throw e;
     }
-    if (seq !== state.renderSeq) return;
+    if (seq !== state.renderSeq || state.shopResolveGen !== resolveGen) {
+      return;
+    }
     if (vm?.lines) vm = { ...vm, lines: applyQtyOverrides(vm.lines, state.qtyByRole) };
     state.shopVm = vm;
     state.shopDirty = false;
+    state.shopResolving = false;
     ensureAcceptedDefaults(vm);
   } else if (vm) {
     await histP;
@@ -8311,7 +8849,7 @@ function bindShopScreen() {
       state.accepted = {};
       state.qtyByRole = {};
       state.confirmed = false;
-      state.checkoutUrl = "";
+      clearCheckoutLinks();
       state.picker = null;
       state.shopDirty = true;
       swapAbort?.abort();
@@ -8347,6 +8885,7 @@ function bindShopScreen() {
   }
   root.querySelectorAll("[data-ok]").forEach((el) => {
     el.onchange = () => {
+      if (shopListLocked()) return;
       applyAccept(el.dataset.ok, el.checked);
     };
   });
@@ -8410,6 +8949,7 @@ function bindShopScreen() {
   });
   root.querySelectorAll("article.sku[data-sku-toggle]").forEach((art) => {
     art.onclick = (ev) => {
+      if (shopListLocked()) return;
       if (ev.target.closest("a, button, label, input, summary, details, .sku-more, .sku-menu, .qty-stepper, .sku-beacon")) return;
       const role = art.dataset.skuRole;
       const input = art.querySelector("[data-ok]");
@@ -8421,6 +8961,7 @@ function bindShopScreen() {
   root.querySelectorAll("[data-group-accept]").forEach((b) => {
     b.onclick = (ev) => {
       ev.stopPropagation();
+      if (shopListLocked()) return;
       const turnOn = b.dataset.groupOn === "1";
       const wrap = b.closest(".group");
       if (!wrap) return;
@@ -8435,15 +8976,20 @@ function bindShopScreen() {
     };
   });
   root.querySelectorAll("[data-add-group]").forEach((b) => {
-    b.onclick = () => openBrowse({ group: b.dataset.addGroup, groupTitle: b.dataset.addTitle });
+    b.onclick = () => {
+      if (shopListLocked()) return;
+      openBrowse({ group: b.dataset.addGroup, groupTitle: b.dataset.addTitle });
+    };
   });
   root.querySelectorAll("[data-rm]").forEach((b) => {
     b.onclick = (ev) => {
       ev.stopPropagation();
+      if (shopListLocked()) return;
       state.removed = [...new Set([...state.removed, b.dataset.rm])];
       const next = { ...state.accepted };
       delete next[b.dataset.rm];
       state.accepted = next;
+      state.confirmed = false;
       state.shopDirty = true;
       render();
     };
@@ -8451,6 +8997,7 @@ function bindShopScreen() {
   root.querySelectorAll("[data-swap-line]").forEach((b) => {
     b.onclick = (ev) => {
       ev.stopPropagation();
+      if (shopListLocked()) return;
       let line = {};
       try {
         line = JSON.parse(decodeURIComponent(b.dataset.swapLine));
@@ -8497,7 +9044,12 @@ function bindShopScreen() {
     };
   }
   const addCat = $("#add-cat");
-  if (addCat) addCat.onclick = () => openBrowse({ pickGroup: true });
+  if (addCat) {
+    addCat.onclick = () => {
+      if (shopListLocked()) return;
+      openBrowse({ pickGroup: true });
+    };
+  }
   root.querySelectorAll("[data-facet]").forEach((b) => {
     b.onclick = () => {
       let f = {};
@@ -8537,9 +9089,29 @@ function bindShopScreen() {
   });
   const print = $("#print");
   if (print) {
-    print.onclick = () => {
+    print.onclick = (ev) => {
+      if (state.shopResolving || state.cartPushing) {
+        ev.preventDefault();
+        return;
+      }
+      if (print.disabled || print.dataset.busy === "1") return;
       void pushShopCartToSilpo();
     };
+  }
+  const webCart = root.querySelector("[data-silpo-web-cart]");
+  if (webCart) {
+    webCart.onclick = (ev) => {
+      // Ensure new tab even if href empty/odd; keep default if native works.
+      const href = webCart.getAttribute("href") || silpoWebCartUrl();
+      if (!href) {
+        ev.preventDefault();
+        openSilpoCart({ preferApp: false });
+      }
+    };
+  }
+  const appCart = root.querySelector("[data-silpo-app-cart]");
+  if (appCart) {
+    appCart.onclick = () => openSilpoCart({ preferApp: true });
   }
   document.onkeydown = (e) => {
     if (e.key !== "Escape") return;
@@ -8576,6 +9148,7 @@ function bindShopScreen() {
 function applySwap(role, pick) {
   state.swaps = { ...state.swaps, [role]: pick };
   state.picker = null;
+  state.confirmed = false;
   if (state.shopVm?.lines) {
     const lines = state.shopVm.lines.map((l) => {
       if (l.role !== role) return l;

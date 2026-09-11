@@ -302,21 +302,36 @@ export function shopProgressStripHtml(opts = {}) {
 }
 
 /** Checkout dock CTA with inline sum (ds441). */
-export function shopDockCtaHtml({ okCount = 0, sumLabel = "—", loading = false, confirmed = false, pushing = false } = {}) {
+export function shopDockCtaHtml({
+  okCount = 0,
+  sumLabel = "—",
+  loading = false,
+  confirmed = false,
+  pushing = false,
+  resolving = false,
+  checkoutHref = "",
+} = {}) {
   if (pushing) {
-    return `<button type="button" class="primary dock-cta" id="print" disabled aria-busy="true" aria-label="Додаємо в кошик Сільпо">
-      <span class="dock-cta__label">Додаємо в кошик…</span>
+    return `<button type="button" class="primary dock-cta is-busy" id="print" disabled aria-busy="true" aria-label="Додаємо в кошик Сільпо">
+      <span class="dock-cta__label"><span class="btn-busy__spin" aria-hidden="true"></span><span class="btn-busy__label">Додаємо в кошик…</span></span>
       <span class="dock-cta__sum num">${sumLabel}</span>
     </button>`;
   }
   if (confirmed) {
-    return `<button type="button" class="primary dock-cta" id="print" aria-label="Відкрити кошик Сільпо">
-      <span class="dock-cta__label">Відкрити кошик Сільпо</span>
+    return `<button type="button" class="primary dock-cta" id="print" aria-label="Додати ще в кошик Сільпо без подвоєння вже наявних">
+      <span class="dock-cta__label">Додати ще</span>
       <span class="dock-cta__sum num">${sumLabel}</span>
     </button>`;
   }
   const n = Math.max(0, Number(okCount) || 0);
-  return `<button type="button" class="primary dock-cta" id="print" ${loading || !n ? "disabled" : ""} aria-label="Погодити ${n} позицій і додати в кошик Сільпо на суму ${sumLabel}">
+  const locked = Boolean(loading || resolving || !n);
+  if (resolving || loading) {
+    return `<button type="button" class="primary dock-cta is-busy" id="print" disabled aria-busy="true" aria-label="Оновлюємо список">
+      <span class="dock-cta__label"><span class="btn-busy__spin" aria-hidden="true"></span><span class="btn-busy__label">Оновлюємо список…</span></span>
+      <span class="dock-cta__sum num">${sumLabel}</span>
+    </button>`;
+  }
+  return `<button type="button" class="primary dock-cta" id="print" ${locked ? "disabled" : ""} aria-label="Погодити ${n} позицій і додати в кошик Сільпо на суму ${sumLabel}">
     <span class="dock-cta__label">Погодити ${n || "0"}</span>
     <span class="dock-cta__sum num">${sumLabel}</span>
   </button>`;

@@ -57,6 +57,13 @@ export function redirectUri(req) {
   return `${publicBaseUrl(req)}/auth/callback`;
 }
 
+function noStoreHeaders() {
+  return {
+    "Cache-Control": "private, no-store, no-cache, max-age=0, must-revalidate",
+    Pragma: "no-cache",
+  };
+}
+
 function sendJson(res, code, obj, extraHeaders = {}) {
   const headers = { "Content-Type": "application/json; charset=utf-8", ...extraHeaders };
   if (typeof res.status === "function" && typeof res.json === "function") {
@@ -99,15 +106,48 @@ function setCookies(res, cookies) {
   }
 }
 
-function redirect(res, location, cookies = []) {
+function redirect(res, location, cookies = [], extraHeaders = {}) {
   setCookies(res, cookies);
-  if (typeof res.redirect === "function") {
-    return res.redirect(302, location);
+  const headers = { Location: location, ...noStoreHeaders(), ...extraHeaders };
+  if (typeof res.status === "function" && typeof res.setHeader === "function") {
+    Object.entries(headers).forEach(([k, v]) => {
+      if (k.toLowerCase() === "set-cookie") return;
+      res.setHeader(k, v);
+    });
+    if (typeof res.redirect === "function") return res.redirect(302, location);
+    res.statusCode = 302;
+    return res.end();
   }
-  const headers = { Location: location };
   if (cookies.length) headers["Set-Cookie"] = cookies.length === 1 ? cookies[0] : cookies;
   res.writeHead(302, headers);
   res.end();
+}
+
+function authDoneHtml({ ok, message }) {
+  const title = ok ? "Вхід успішний" : "Вхід не вдався";
+  const body = message || (ok ? "Повертаємо в додаток…" : "Спробуйте ще раз.");
+  const link = ok
+    ? `<p><a href="/#/shop">До Express</a> · <a href="/">На старт</a></p>`
+    : `<p><a href="/auth/start">Увійти ще раз</a> · <a href="/">На старт</a></p>`;
+  return `<!doctype html><html lang="uk"><meta charset="utf-8"/><title>${title}</title>
+<body style="font-family:system-ui;padding:2rem;max-width:28rem">
+<p><strong>${title}.</strong></p>
+<p>${body}</p>
+${link}
+<script>
+try {
+  var h = sessionStorage.getItem("silpo.returnHash") || "#/";
+  sessionStorage.removeItem("silpo.returnHash");
+  ${
+    ok
+      ? `sessionStorage.setItem("silpo.justAuthed", "1");
+  if (h.charAt(0) === "#") location.replace("/" + h);
+  else location.replace("/");`
+      : ""
+  }
+} catch (e) {}
+</script>
+</body></html>`;
 }
 
 async function readBody(req) {
@@ -147,8 +187,15 @@ async function resolveAccessToken(root, req, res) {
         });
         setCookies(res, [setTokenCookie(next)]);
         return next.access_token;
-      } catch {
-        return blob.access_token;
+      } catch (e) {
+        console.warn("token_refresh_failed", e?.message || e);
+        // Stale access often already dead on Silpo — force re-login on Vercel.
+        try {
+          setCookies(res, [clearTokenCookie()]);
+        } catch {
+          /* ignore */
+        }
+        return "";
       }
     }
     return blob.access_token;
@@ -414,6 +461,15 @@ export async function handleApiRequest({ root, req, res, pathname: pathnameOverr
   }
 
   if (method === "GET" && pathname === "/auth/start") {
+    if (!process.env.PUBLIC_BASE_URL && process.env.VERCEL) {
+      sendHtml(
+        res,
+        500,
+        `<p>PUBLIC_BASE_URL не задано на Vercel — OAuth redirect зламається.</p>`,
+        noStoreHeaders(),
+      );
+      return true;
+    }
     const redir = redirectUri(req);
     const client = await registerClient(redir);
     const { verifier, challenge } = pkcePair();
@@ -425,7 +481,7 @@ export async function handleApiRequest({ root, req, res, pathname: pathnameOverr
       cookies.push(setPendingAuthCookie(pending));
     } catch (e) {
       if (process.env.VERCEL) {
-        sendHtml(res, 500, `<p>Auth cookie secret missing: ${e.message}</p>`);
+        sendHtml(res, 500, `<p>Auth cookie secret missing: ${e.message}</p>`, noStoreHeaders());
         return true;
       }
     }
@@ -439,28 +495,62 @@ export async function handleApiRequest({ root, req, res, pathname: pathnameOverr
     return true;
   }
 
+  if (method === "GET" && pathname === "/auth/done") {
+    const err = url.searchParams.get("error");
+    const detail = url.searchParams.get("detail") || "";
+    if (err) {
+      const messages = {
+        missing_code: "Немає authorization code у callback. Почніть вхід знову.",
+        missing_pending:
+          "Сесія PKCE вже використана або cookie зникла (оновіть сторінку після OTP не варто). Почніть вхід знову.",
+        oauth: `Помилка OAuth: ${detail || "unknown"}`,
+        exchange: `Обмін коду не вдався: ${detail || "unknown"}`,
+      };
+      sendHtml(
+        res,
+        400,
+        authDoneHtml({ ok: false, message: messages[err] || detail || err }),
+        noStoreHeaders(),
+      );
+      return true;
+    }
+    sendHtml(res, 200, authDoneHtml({ ok: true, message: url.searchParams.get("note") || "" }), noStoreHeaders());
+    return true;
+  }
+
   if (method === "GET" && pathname === "/auth/callback") {
     const err = url.searchParams.get("error");
     if (err) {
-      sendHtml(res, 400, `<p>OAuth error: ${err}</p><p><a href="/">Назад</a></p>`);
+      redirect(res, `/auth/done?error=oauth&detail=${encodeURIComponent(err)}`);
       return true;
     }
     const code = url.searchParams.get("code");
     const state = url.searchParams.get("state");
-    let pending = localPending.get(state);
-    localPending.delete(state);
+    let pending = state ? localPending.get(state) : null;
+    if (state) localPending.delete(state);
     if (!pending) {
       const fromCookie = readPendingAuth(req.headers?.cookie || "");
       if (fromCookie?.state === state) pending = fromCookie;
     }
-    if (!code || !pending) {
-      sendHtml(
-        res,
-        400,
-        `<p>Немає code/state. Почніть з <a href="/auth/start">/auth/start</a>.</p>`,
-      );
+
+    // Already finished (double GET / refresh): token cookie present → success PRG
+    const existing = readTokenBlob(req.headers?.cookie || "");
+    if (!pending && existing?.access_token) {
+      redirect(res, "/auth/done", [clearPendingAuthCookie()]);
       return true;
     }
+
+    if (!code) {
+      redirect(res, "/auth/done?error=missing_code", [clearPendingAuthCookie()]);
+      return true;
+    }
+    if (!pending) {
+      redirect(res, "/auth/done?error=missing_pending", [clearPendingAuthCookie()]);
+      return true;
+    }
+
+    // Single-flight: burn PKCE cookie before calling /token (one-time code)
+    const burn = [clearPendingAuthCookie()];
     try {
       const redir = redirectUri(req);
       const tok = await exchangeCode({
@@ -470,7 +560,7 @@ export async function handleApiRequest({ root, req, res, pathname: pathnameOverr
         verifier: pending.verifier,
       });
       const blob = tokenBlobFromOAuth(pending.clientId, tok);
-      const cookies = [clearPendingAuthCookie()];
+      const cookies = [...burn];
       try {
         cookies.push(setTokenCookie(blob));
       } catch {
@@ -482,29 +572,29 @@ export async function handleApiRequest({ root, req, res, pathname: pathnameOverr
         /* Vercel read-only — cookie is enough */
       }
       clearHistoryMcpCache();
-      let toolsLine = "tools/list ще не зняли";
+      let note = "";
       try {
         const snap = await snapshotTools(root, tok.access_token);
-        toolsLine = snap.ok ? `tools/list: ${snap.count} tools` : `tools/list http ${snap.http}`;
-      } catch (e) {
-        toolsLine = `tools/list: ${e.message}`;
+        note = snap.ok ? `tools/list: ${snap.count}` : "";
+      } catch {
+        /* ignore */
       }
-      setCookies(res, cookies);
-      sendHtml(
-        res,
-        200,
-        `<p>Вхід успішний.</p><p>${toolsLine}</p><p><a href="/#/shop">До Express</a> · <a href="/">На старт</a></p>
-<script>
-try {
-  var h = sessionStorage.getItem("silpo.returnHash") || "#/";
-  sessionStorage.removeItem("silpo.returnHash");
-  if (h.charAt(0) === "#") location.replace("/" + h);
-} catch (e) {}
-</script>`,
-      );
+      const done = note ? `/auth/done?note=${encodeURIComponent(note)}` : "/auth/done";
+      redirect(res, done, cookies);
       return true;
     } catch (e) {
-      sendHtml(res, 400, `<p>Обмін коду не вдався: ${e.message}</p><p><a href="/auth/start">Ще раз</a></p>`);
+      const msg = e?.message || String(e);
+      // Race: another callback already redeemed code and set cookie
+      const after = readTokenBlob(req.headers?.cookie || "");
+      if (/invalid_grant/i.test(msg) && after?.access_token) {
+        redirect(res, "/auth/done", burn);
+        return true;
+      }
+      redirect(
+        res,
+        `/auth/done?error=exchange&detail=${encodeURIComponent(msg)}`,
+        burn,
+      );
       return true;
     }
   }
@@ -543,21 +633,44 @@ try {
 
   if (method === "POST" && pathname === "/api/cart/push") {
     const body = await readBody(req);
+    const cookieHeader = req.headers?.cookie || "";
+    const hasTokCookie = /(?:^|;\s*)silpo_tok=/.test(cookieHeader);
     const access = await resolveAccessToken(root, req, res);
     if (!access) {
+      console.warn("cart_push_unauthorized", { hasTokCookie, host: publicBaseUrl(req) });
       sendJson(res, 401, {
         ok: false,
         error: "login_required",
         login: "/auth/start",
-        message: "Увійдіть у Сільпо, щоб додати товари в кошик",
+        message: hasTokCookie
+          ? "Сесія Сільпо застаріла — увійдіть знову"
+          : "Увійдіть у Сільпо, щоб додати товари в кошик",
       });
       return true;
     }
     try {
       const products = Array.isArray(body.products) ? body.products : [];
+      console.log("cart_push_start", { n: products.length, hasTokCookie });
       const out = await pushCartProducts(access, products, { merge: body.merge !== false });
+      if (!out.ok && out.error === "mcp_init_failed" && out.http === 401) {
+        try {
+          setCookies(res, [clearTokenCookie()]);
+        } catch {
+          /* ignore */
+        }
+        sendJson(res, 401, {
+          ok: false,
+          error: "login_required",
+          login: "/auth/start",
+          message: "Сесія Сільпо закінчилась — увійдіть знову",
+          trace: out.trace,
+        });
+        return true;
+      }
+      console.log("cart_push_done", { ok: out.ok, error: out.error || null, added: out.added });
       sendJson(res, out.ok ? 200 : 502, out);
     } catch (e) {
+      console.error("cart_push_exception", e);
       sendJson(res, 500, { ok: false, error: e.message, added: 0, skipped: 0 });
     }
     return true;

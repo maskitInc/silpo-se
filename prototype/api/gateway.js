@@ -25,6 +25,16 @@ function pathnameFromReq(req) {
 
 export default async function handler(req, res) {
   try {
+    // Preflight (some browsers / extensions hit OPTIONS even on same-site JSON POSTs)
+    if (req.method === "OPTIONS") {
+      res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
+      res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+      res.setHeader("Access-Control-Max-Age", "86400");
+      res.status(204).end();
+      return;
+    }
     const pathname = pathnameFromReq(req);
     // Rebuild URL so callback query params stay on req.url for URL()
     if (pathname.startsWith("/auth/") || pathname.startsWith("/api/")) {

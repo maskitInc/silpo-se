@@ -5,10 +5,22 @@ export function extractCartId(payload) {
   return o?.shoppingCartId || o?.cartId || o?.id || o?.cart?.shoppingCartId || o?.cart?.id || null;
 }
 
-export function extractCheckout(payload) {
+export function extractCheckoutLinks(payload) {
   const o = unwrap(payload);
   const cart = o?.cart || o;
-  return cart?.checkoutMobileLink || cart?.checkoutWebLink || cart?.checkoutLink || null;
+  const web = cart?.checkoutWebLink || cart?.checkoutLink || null;
+  const mobile = cart?.checkoutMobileLink || null;
+  return {
+    web: web || null,
+    mobile: mobile || null,
+    /** Prefer web so «відкрити кошик» lands on silpo.ua, not app deep link. */
+    primary: web || mobile || null,
+  };
+}
+
+/** @deprecated Prefer extractCheckoutLinks; returns web-first primary URL. */
+export function extractCheckout(payload) {
+  return extractCheckoutLinks(payload).primary;
 }
 
 /** Map productId → quantity already in guest cart (sum across shipments). */

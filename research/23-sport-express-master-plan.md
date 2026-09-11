@@ -37,7 +37,7 @@
 
 ### Epic 1 — P0 handoff (Step 1 → …) ✅ Step 1 shipped ds402
 1. Provenance on sport extras (`from:sport_day`, `programId`) ✅
-2. Bulk «усі тарілки → Express» ✅
+2. Bulk «усі страви → Express» ✅
 3. Shop callout «з програми X» ✅
 4. Guard: sport handoff never uses wipe `go("shop")` ✅ (`enterShopFromSport`)
 5. **Research spike next:** soft vs hard ration UX copy; optional hash `?from=sport`
