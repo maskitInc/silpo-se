@@ -1036,7 +1036,17 @@ function capturePulseBadgeFlip(rootEl) {
 }
 
 function playPulseBadgeFlip(rootEl, fromMap) {
-  if (!rootEl || !fromMap?.size || prefersReduce()) return;
+  if (!rootEl || !fromMap?.size || prefersReduce()) {
+    scheduleWeekBadgeOverlapResolve(rootEl);
+    return;
+  }
+  let pending = 0;
+  rootEl.classList.add("is-badge-flipping");
+  const finishFlip = () => {
+    rootEl.classList.remove("is-badge-flipping");
+    /* Overlap only after FLIP settles — measuring mid-transition baked flying ox/oy */
+    scheduleWeekBadgeOverlapResolve(rootEl);
+  };
   rootEl.querySelectorAll(".home-pulse__week-badge").forEach((el) => {
     const prev = fromMap.get(badgeFlipKey(el));
     if (!prev) return;
@@ -1044,6 +1054,7 @@ function playPulseBadgeFlip(rootEl, fromMap) {
     const dx = prev.left - next.left;
     const dy = prev.top - next.top;
     if (Math.hypot(dx, dy) < 1.5) return;
+    pending += 1;
     el.style.transition = "none";
     el.style.setProperty("--badge-dx", `${dx}px`);
     el.style.setProperty("--badge-dy", `${dy}px`);
@@ -1055,6 +1066,8 @@ function playPulseBadgeFlip(rootEl, fromMap) {
       el.style.removeProperty("--badge-dx");
       el.style.removeProperty("--badge-dy");
       el.removeEventListener("transitionend", onEnd);
+      pending -= 1;
+      if (pending <= 0) finishFlip();
     };
     const onEnd = (ev) => {
       if (ev.propertyName !== "transform") return;
@@ -1063,11 +1076,12 @@ function playPulseBadgeFlip(rootEl, fromMap) {
     el.addEventListener("transitionend", onEnd);
     window.setTimeout(clear, 420);
   });
-  scheduleWeekBadgeOverlapResolve(rootEl);
-  window.setTimeout(() => scheduleWeekBadgeOverlapResolve(rootEl), 450);
+  if (pending <= 0) {
+    window.setTimeout(finishFlip, 0);
+  }
 }
 
-/** After keep-spark land: recompute viewport edge anchors so badges ease to inset transforms. */
+/** After keep-spark land: retag viewport edges (axis ticks); badges stay peak-centered. */
 function refreshSparkEdgeClasses(wrap) {
   if (!wrap) return;
   const rest = Number(wrap.dataset.sparkRestX) || 0;
@@ -1094,17 +1108,23 @@ function refreshSparkEdgeClasses(wrap) {
 }
 
 /**
- * Push overlapping week badges apart via --badge-ox/oy (leaves FLIP --badge-dx/dy alone).
- * Food↑ / sport↓ when mixed; same-series splits on the cheaper axis.
+ * Push overlapping week badges apart via --badge-oy (Y-first) + capped --badge-ox for clip inset.
+ * Food↑ / sport↓ when mixed; same-series splits vertically only (no horizontal fly-off).
  */
 function resolveWeekBadgeOverlaps(scope) {
   const host = scope && scope.querySelectorAll ? scope : root;
+  if (host.classList?.contains("is-badge-flipping") || host.querySelector?.(".is-badge-flipping")) {
+    return;
+  }
   const layers = [...host.querySelectorAll(".home-pulse__week-badges")];
   const gap = 8;
   const maxIter = 16;
+  const maxOx = 22;
   for (const layer of layers) {
+    const pulse = layer.closest(".home-pulse");
+    if (pulse?.classList.contains("is-badge-flipping")) continue;
     const badges = [...layer.querySelectorAll(".home-pulse__week-badge")];
-    if (badges.length < 2) continue;
+    if (!badges.length) continue;
     for (const el of badges) {
       el.style.setProperty("--badge-ox", "0px");
       el.style.setProperty("--badge-oy", "0px");
@@ -1112,7 +1132,8 @@ function resolveWeekBadgeOverlaps(scope) {
     const layerRect = layer.getBoundingClientRect();
     if (!(layerRect.width > 0) || !(layerRect.height > 0)) continue;
 
-    /* Pre-stagger same-series neighbors that start almost stacked (before iterative push). */
+    if (badges.length >= 2) {
+    /* Pre-stagger same-series neighbors vertically only. */
     {
       const ranked = [...badges].sort((a, b) => {
         const ax = a.getBoundingClientRect().left;
@@ -1188,31 +1209,8 @@ function resolveWeekBadgeOverlaps(scope) {
             continue;
           }
 
-          if (oxlap <= oylap) {
-            const push = (oxlap + gap) / 2 + 0.5;
-            const left = A.r.left <= B.r.left ? A : B;
-            const right = left === A ? B : A;
-            left.ox -= push;
-            right.ox += push;
-            left.el.style.setProperty("--badge-ox", `${left.ox}px`);
-            right.el.style.setProperty("--badge-ox", `${right.ox}px`);
-            left.r = {
-              left: left.r.left - push,
-              right: left.r.right - push,
-              top: left.r.top,
-              bottom: left.r.bottom,
-              width: left.r.width,
-              height: left.r.height,
-            };
-            right.r = {
-              left: right.r.left + push,
-              right: right.r.right + push,
-              top: right.r.top,
-              bottom: right.r.bottom,
-              width: right.r.width,
-              height: right.r.height,
-            };
-          } else {
+          /* Same series: vertical only — horizontal push made pills fly off peaks */
+          {
             const push = (oylap + gap) / 2 + 0.5;
             const top = A.r.top <= B.r.top ? A : B;
             const bot = top === A ? B : A;
@@ -1236,30 +1234,33 @@ function resolveWeekBadgeOverlaps(scope) {
               width: bot.r.width,
               height: bot.r.height,
             };
+            moved = true;
           }
-          moved = true;
         }
       }
       if (!moved) break;
     }
+    } /* end badges.length >= 2 deoverlap */
 
     for (const el of badges) {
       const r = el.getBoundingClientRect();
       let ox = parseFloat(el.style.getPropertyValue("--badge-ox")) || 0;
       let oy = parseFloat(el.style.getPropertyValue("--badge-oy")) || 0;
-      /* X inset keeps labels inside clipped spark; Y soft so food↔sport deoverlap survives */
       const insetX = 10;
       const insetY = 2;
-      if (r.left < layerRect.left + insetX) ox += layerRect.left + insetX - r.left;
-      if (r.right > layerRect.right - insetX) ox -= r.right - (layerRect.right - insetX);
-      if (r.top < layerRect.top + insetY) oy += layerRect.top + insetY - r.top;
-      if (r.bottom > layerRect.bottom - insetY) oy -= r.bottom - (layerRect.bottom - insetY);
+      /* Clamp to visible spark-wrap (overflow:hidden), not the full strip stage */
+      const clipHost = layer.closest(".home-pulse__spark-wrap")?.getBoundingClientRect() || layerRect;
+      if (r.left < clipHost.left + insetX) ox += clipHost.left + insetX - r.left;
+      if (r.right > clipHost.right - insetX) ox -= r.right - (clipHost.right - insetX);
+      if (r.top < clipHost.top + insetY) oy += clipHost.top + insetY - r.top;
+      if (r.bottom > clipHost.bottom - insetY) oy -= r.bottom - (clipHost.bottom - insetY);
+      ox = Math.max(-maxOx, Math.min(maxOx, ox));
       el.style.setProperty("--badge-ox", `${ox}px`);
       el.style.setProperty("--badge-oy", `${oy}px`);
     }
 
     /* One more food↑ / sport↓ pass after edge clamp */
-    {
+    if (badges.length >= 2) {
       const boxes = badges.map((el) => ({
         el,
         r: el.getBoundingClientRect(),
@@ -2830,6 +2831,12 @@ function homeBaseChipHtml() {
     </button>`;
 }
 
+/**
+ * Experiment: 3-col metrics inside dark status-band (month → divider → stats → whisper).
+ * Set false to restore metrics in white story-pad below whisper (pre-experiment).
+ */
+const PULSE_STATS_IN_BAND = false;
+
 function homeSportPulseHtml() {
   const receipts = state.historyCache?.receipts || [];
   const nav = resolveSportPulseMonthNav(receipts);
@@ -3257,18 +3264,57 @@ function homeSportPulseHtml() {
           </span>`
         : "";
   return `
-    <section class="home-pulse home-pulse--sport home-pulse--peer home-pulse--story home-pulse--v5e home-pulse--sport-express${card.kcalHot ? " is-kcal-hot" : ""}${nav.isArchive ? " home-pulse--archive" : ""}${card.demo ? " is-demo-series" : ""}" aria-label="СільпоSport · ${esc(programLine)}" data-sport-month-key="${esc(monthKey)}" data-sport-chart-w="${chartW}" data-sport-budget="${card.dailyBudget}">
+    <section class="home-pulse home-pulse--sport home-pulse--peer home-pulse--story home-pulse--v5e home-pulse--sport-express${PULSE_STATS_IN_BAND ? " home-pulse--stats-in-band" : ""}${card.kcalHot ? " is-kcal-hot" : ""}${nav.isArchive ? " home-pulse--archive" : ""}${card.demo ? " is-demo-series" : ""}" aria-label="СільпоSport · ${esc(programLine)}" data-sport-month-key="${esc(monthKey)}" data-sport-chart-w="${chartW}" data-sport-budget="${card.dailyBudget}">
       <div class="home-pulse__status-band">
-        <div class="home-pulse__month-nav" role="group" aria-label="Місяць СільпоSport">
+        ${
+          PULSE_STATS_IN_BAND
+            ? `<div class="home-pulse__status-band-top">
+          <div class="home-pulse__month-nav" role="group" aria-label="Місяць СільпоSport">
+            ${monthPrevBtn}
+            <span class="home-pulse__status-month">${esc(monthShort)}</span>
+            ${monthNextBtn}
+            ${archiveMark}
+          </div>
+          ${statusPct}
+        </div>
+        <div class="home-pulse__status-band-rule" aria-hidden="true"></div>
+        <div class="home-pulse__head home-pulse__head--tri">
+          <div class="home-pulse__col home-pulse__col--plan">
+            <span class="home-pulse__metric-k">спорт заняття</span>
+            <p class="home-pulse__metric-num num is-ok" data-sport-count="${card.sessionGoal}">${esc(String(card.sessionGoal))}</p>
+            <div class="home-pulse__col-foot">
+              <button type="button" class="home-pulse__goal-change" id="edit-sport-session-goal" aria-expanded="false" aria-controls="sport-session-goal-edit" aria-label="Ціль ${card.sessionGoal} занять. Змінити">
+                ${pencilIco}<span>змінити</span>
+              </button>
+            </div>
+          </div>
+          <div class="home-pulse__col home-pulse__col--spent">
+            <span class="home-pulse__metric-k">харчовий раціон</span>
+            <p class="home-pulse__metric-num home-pulse__spent home-pulse__spent--sport num ${kcalTone}" data-sport-kcal="${card.kcal}">${esc(formatIntUa(card.kcal))}</p>
+            <div class="home-pulse__col-foot">${kcalFoot}</div>
+          </div>
+          <div class="home-pulse__col home-pulse__col--delta ${card.overSessions ? "is-over" : "is-ok"}">
+            <span class="home-pulse__metric-k">${card.overSessions ? "понад" : "залишилось"}</span>
+            <p class="home-pulse__metric-num home-pulse__delta-num num">${esc(String(card.overSessions ? card.sessionsDone - card.sessionGoal : card.leftSessions))}</p>
+            <div class="home-pulse__col-foot">
+              ${daysMetaSport}
+            </div>
+          </div>
+        </div>`
+            : `<div class="home-pulse__month-nav" role="group" aria-label="Місяць СільпоSport">
           ${monthPrevBtn}
           <span class="home-pulse__status-month">${esc(monthShort)}</span>
           ${monthNextBtn}
           ${archiveMark}
         </div>
-        ${statusPct}
+        ${statusPct}`
+        }
       </div>
       ${whisperHtml}
-      <div class="home-pulse__story-pad">
+      ${
+        PULSE_STATS_IN_BAND
+          ? ""
+          : `<div class="home-pulse__story-pad">
         <div class="home-pulse__head home-pulse__head--tri">
           <div class="home-pulse__col home-pulse__col--plan">
             <span class="home-pulse__metric-k">спорт заняття</span>
@@ -3292,7 +3338,8 @@ function homeSportPulseHtml() {
             </div>
           </div>
         </div>
-      </div>
+      </div>`
+      }
       <div class="home-pulse__spark-wrap home-pulse__spark-wrap--sport" data-spark-rest-x="${sparkRestX}" data-spark-peek-left="${sparkPeekLeft}" data-spark-peek-right="${sparkPeekRight}" data-spark-commit-prev="${sparkCommitPrev}" data-spark-commit-next="${sparkCommitNext}" data-spark-pitch="${pitch}" data-spark-seg-lens="${sparkSegLens}" data-spark-seg-i="${sparkSegI}" data-spark-strip="1">
         <div class="home-pulse__spark-track" style="width:${stripW}px;transform:translate3d(-${sparkRestX}px,0,0)">
           <div class="home-pulse__spark-stage">
@@ -5503,20 +5550,7 @@ function homePulseHtml(hasToken) {
     : "";
   const headClass =
     goalCol && deltaCol ? "home-pulse__head home-pulse__head--tri" : "home-pulse__head home-pulse__head--fused";
-  return `
-    <section class="home-pulse home-pulse--craft home-pulse--story home-pulse--v5e${overGoal ? " home-pulse--over" : ""}${nav.isArchive ? " home-pulse--archive" : ""}" aria-label="Витрати за місяць" data-spark-peaks="1" data-month-key="${esc(monthKey)}" data-chart-w="${chartW}">
-      <div class="home-pulse__status-band${overGoal ? " is-over" : ""}">
-        <div class="home-pulse__month-nav" role="group" aria-label="Місяць">
-          ${monthPrevBtn}
-          <span class="home-pulse__status-month">${esc(monthShort)}</span>
-          ${monthNextBtn}
-          ${archiveMark}
-        </div>
-        ${statusPct || ""}
-      </div>
-      ${whisperHtml}
-      <div class="home-pulse__story-pad">
-        <div class="${headClass}">
+  const headBlock = `<div class="${headClass}">
           ${goalCol}
           <div class="home-pulse__col home-pulse__col--spent">
             <span class="home-pulse__metric-k">витрачено</span>
@@ -5524,9 +5558,43 @@ function homePulseHtml(hasToken) {
             ${spentFoot}
           </div>
           ${deltaCol}
+        </div>`;
+  return `
+    <section class="home-pulse home-pulse--craft home-pulse--story home-pulse--v5e${PULSE_STATS_IN_BAND ? " home-pulse--stats-in-band" : ""}${overGoal ? " home-pulse--over" : ""}${nav.isArchive ? " home-pulse--archive" : ""}" aria-label="Витрати за місяць" data-spark-peaks="1" data-month-key="${esc(monthKey)}" data-chart-w="${chartW}">
+      <div class="home-pulse__status-band${overGoal ? " is-over" : ""}">
+        ${
+          PULSE_STATS_IN_BAND
+            ? `<div class="home-pulse__status-band-top">
+          <div class="home-pulse__month-nav" role="group" aria-label="Місяць">
+            ${monthPrevBtn}
+            <span class="home-pulse__status-month">${esc(monthShort)}</span>
+            ${monthNextBtn}
+            ${archiveMark}
+          </div>
+          ${statusPct || ""}
         </div>
-        ${coverageNote}
+        <div class="home-pulse__status-band-rule" aria-hidden="true"></div>
+        ${headBlock}`
+            : `<div class="home-pulse__month-nav" role="group" aria-label="Місяць">
+          ${monthPrevBtn}
+          <span class="home-pulse__status-month">${esc(monthShort)}</span>
+          ${monthNextBtn}
+          ${archiveMark}
+        </div>
+        ${statusPct || ""}`
+        }
       </div>
+      ${whisperHtml}
+      ${
+        PULSE_STATS_IN_BAND
+          ? coverageNote
+            ? `<div class="home-pulse__story-pad home-pulse__story-pad--coverage">${coverageNote}</div>`
+            : ""
+          : `<div class="home-pulse__story-pad">
+        ${headBlock}
+        ${coverageNote}
+      </div>`
+      }
       <div class="home-pulse__spark-wrap" data-spark-rest-x="${sparkRestX}" data-spark-peek-left="${sparkPeekLeft}" data-spark-peek-right="${sparkPeekRight}" data-spark-commit-prev="${sparkCommitPrev}" data-spark-commit-next="${sparkCommitNext}" data-spark-pitch="${pitch}" data-spark-seg-lens="${sparkSegLens}" data-spark-seg-i="${sparkSegI}" data-spark-strip="1">
         <div class="home-pulse__spark-track" style="width:${stripW}px;transform:translate3d(-${sparkRestX}px,0,0)">
           <div class="home-pulse__spark-stage">

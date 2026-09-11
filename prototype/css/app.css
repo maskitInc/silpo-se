@@ -1148,6 +1148,109 @@ img { max-width: 100%; }
   max-height: min(70vh, 420px);
   overflow: auto;
 }
+
+/* ── Experiment: stats in dark status-band (PULSE_STATS_IN_BAND) ──
+   Revert: set PULSE_STATS_IN_BAND=false in js/app.js (CSS then unused). */
+.home-pulse--stats-in-band > .home-pulse__status-band {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0;
+  padding: 8px 12px 10px;
+}
+.home-pulse--stats-in-band .home-pulse__status-band-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 8px;
+  width: 100%;
+  min-width: 0;
+}
+.home-pulse--stats-in-band .home-pulse__status-band-rule {
+  height: 1px;
+  margin: 8px 0 10px;
+  background: color-mix(in oklch, oklch(0.97 0.005 90) 14%, transparent);
+  border: 0;
+}
+.home-pulse--stats-in-band > .home-pulse__status-band .home-pulse__head--tri {
+  width: 100%;
+  gap: 8px 4px;
+}
+.home-pulse--stats-in-band > .home-pulse__status-band .home-pulse__metric-k {
+  color: color-mix(in oklch, oklch(0.97 0.005 90) 55%, transparent);
+  font-weight: 650;
+}
+.home-pulse--stats-in-band > .home-pulse__status-band .home-pulse__metric-num,
+.home-pulse--stats-in-band > .home-pulse__status-band .home-pulse__spent {
+  color: oklch(0.97 0.005 90);
+}
+.home-pulse--stats-in-band > .home-pulse__status-band .home-pulse__metric-num.is-ok,
+.home-pulse--stats-in-band > .home-pulse__status-band .home-pulse__spent.is-ok,
+.home-pulse--stats-in-band > .home-pulse__status-band .home-pulse__metric-num.home-pulse__spent.is-ok {
+  color: color-mix(in oklch, var(--leaf) 55%, oklch(0.92 0.04 145));
+}
+.home-pulse--stats-in-band > .home-pulse__status-band .home-pulse__metric-num.is-over,
+.home-pulse--stats-in-band > .home-pulse__status-band .home-pulse__spent.is-over,
+.home-pulse--stats-in-band.home-pulse--over > .home-pulse__status-band .home-pulse__spent {
+  color: color-mix(in oklch, var(--danger) 45%, oklch(0.92 0.05 55));
+}
+.home-pulse--stats-in-band > .home-pulse__status-band .home-pulse__goal-change {
+  color: color-mix(in oklch, oklch(0.97 0.005 90) 72%, transparent);
+}
+.home-pulse--stats-in-band > .home-pulse__status-band .home-pulse__goal-change:hover,
+.home-pulse--stats-in-band > .home-pulse__status-band .home-pulse__goal-change:focus-visible {
+  color: oklch(0.99 0.005 90);
+}
+.home-pulse--stats-in-band > .home-pulse__status-band .home-pulse__goal-change .home-pulse__goal-line-ico {
+  background: color-mix(in oklch, oklch(0.97 0.005 90) 16%, transparent);
+  color: oklch(0.97 0.005 90);
+}
+.home-pulse--stats-in-band > .home-pulse__status-band .home-pulse__delta-meta {
+  color: color-mix(in oklch, oklch(0.97 0.005 90) 62%, transparent);
+}
+.home-pulse--stats-in-band > .home-pulse__status-band .home-pulse__insight,
+.home-pulse--stats-in-band > .home-pulse__status-band .home-pulse__insight-trail {
+  color: color-mix(in oklch, oklch(0.97 0.005 90) 62%, transparent);
+}
+.home-pulse--stats-in-band > .home-pulse__status-band .home-pulse__delta-chip.is-up {
+  background: color-mix(in oklch, var(--danger) 28%, oklch(0.28 0.02 40)) !important;
+  color: color-mix(in oklch, var(--danger) 35%, oklch(0.95 0.03 55)) !important;
+}
+.home-pulse--stats-in-band > .home-pulse__status-band .home-pulse__delta-chip.is-down {
+  background: color-mix(in oklch, var(--leaf) 28%, oklch(0.28 0.02 150)) !important;
+  color: color-mix(in oklch, var(--leaf) 40%, oklch(0.95 0.03 145)) !important;
+}
+.home-pulse--stats-in-band > .home-pulse__status-band .home-pulse__delta-meta--pace .home-pulse__delta-chip,
+.home-pulse--stats-in-band > .home-pulse__status-band .home-pulse__delta-meta--report .home-pulse__delta-chip--report {
+  background: color-mix(in oklch, var(--leaf) 22%, oklch(0.3 0.02 150));
+  color: color-mix(in oklch, var(--leaf) 35%, oklch(0.95 0.02 145));
+  box-shadow: none;
+}
+.home-pulse--stats-in-band.home-pulse--over > .home-pulse__status-band .home-pulse__delta-meta--pace .home-pulse__delta-chip,
+.home-pulse--stats-in-band.home-pulse--over > .home-pulse__status-band .home-pulse__delta-meta--report .home-pulse__delta-chip--report {
+  background: color-mix(in oklch, var(--danger) 26%, oklch(0.3 0.03 40));
+  color: color-mix(in oklch, var(--danger) 35%, oklch(0.95 0.03 55));
+}
+.home-pulse--stats-in-band > .home-pulse__story-pad--coverage {
+  padding: 8px 16px 4px;
+}
+/* Tips now live inside taller band — keep band on top when days-pace / report open */
+.home-pulse--stats-in-band.home-pulse--sport.home-pulse--peer.home-pulse--days-pace-open > .home-pulse__status-band,
+.home-pulse--stats-in-band.home-pulse--sport.home-pulse--peer.home-pulse--month-report-open > .home-pulse__status-band {
+  z-index: 50;
+}
+.home-pulse--stats-in-band.home-pulse--sport.home-pulse--peer.home-pulse--orient-open > .home-pulse__whisper {
+  opacity: 0.22;
+  pointer-events: none;
+}
+.home-pulse--stats-in-band.home-pulse--craft.home-pulse--days-pace-open > .home-pulse__status-band,
+.home-pulse--stats-in-band.home-pulse--craft.home-pulse--month-report-open > .home-pulse__status-band,
+.home-pulse--stats-in-band.home-pulse--craft.home-pulse--orient-open > .home-pulse__status-band {
+  z-index: 50;
+}
+
 .home-pulse__story-pad {
   position: relative;
   z-index: auto;
@@ -2700,15 +2803,6 @@ span.home-pulse__delta-chip {
   cursor: grabbing;
   touch-action: none;
 }
-.home-pulse--craft .home-pulse__spark-wrap.is-panning .home-pulse__week-badge.is-edge-start,
-.home-pulse--craft .home-pulse__spark-wrap.is-panning .home-pulse__week-badge.is-edge-end,
-.home-pulse--sport-express .home-pulse__spark-wrap--sport.is-panning .home-pulse__week-badge.is-edge-start,
-.home-pulse--sport-express .home-pulse__spark-wrap--sport.is-panning .home-pulse__week-badge.is-edge-end {
-  transform: translate(
-    calc(-50% + var(--badge-dx, 0px) + var(--badge-ox, 0px)),
-    calc(-100% - 8px + var(--badge-dy, 0px) + var(--badge-oy, 0px))
-  );
-}
 .home-pulse--craft .home-pulse__spark-wrap.is-panning .home-pulse__week-tick.is-edge-start,
 .home-pulse--craft .home-pulse__spark-wrap.is-panning .home-pulse__week-tick.is-edge-end,
 .home-pulse--sport-express .home-pulse__spark-wrap--sport.is-panning .home-pulse__week-tick.is-edge-start,
@@ -2748,11 +2842,12 @@ span.home-pulse__delta-chip {
   /* --badge-ox/oy: anti-overlap nudge (FLIP keeps --badge-dx/dy) */
   --badge-ox: 0px;
   --badge-oy: 0px;
+  /* Always center on peak mark — edge inset via capped --badge-ox, not transform basis swap */
   transform: translate(
     calc(-50% + var(--badge-dx) + var(--badge-ox)),
     calc(-100% - 8px + var(--badge-dy) + var(--badge-oy))
   );
-  transition: transform 0.28s var(--ease, cubic-bezier(0.22, 1, 0.36, 1));
+  transition: none;
   padding: 3px 8px;
   border-radius: 999px;
   font-size: 10px;
@@ -2766,20 +2861,16 @@ span.home-pulse__delta-chip {
   white-space: nowrap;
   pointer-events: auto;
   cursor: pointer;
+}
+/* FLIP only — avoid animating edge/overlap jumps (“flying” pills) */
+.home-pulse.is-badge-flipping .home-pulse__week-badge {
+  transition: transform 0.28s var(--ease, cubic-bezier(0.22, 1, 0.36, 1));
   will-change: transform;
 }
-/* Inset edge badges so overflow:hidden on spark-wrap does not clip label text */
-.home-pulse__week-badge.is-edge-start {
-  transform: translate(
-    calc(10px + var(--badge-dx) + var(--badge-ox)),
-    calc(-100% - 8px + var(--badge-dy) + var(--badge-oy))
-  );
-}
-.home-pulse__week-badge.is-edge-end {
-  transform: translate(
-    calc(-100% - 10px + var(--badge-dx) + var(--badge-ox)),
-    calc(-100% - 8px + var(--badge-dy) + var(--badge-oy))
-  );
+@media (prefers-reduced-motion: reduce) {
+  .home-pulse.is-badge-flipping .home-pulse__week-badge {
+    transition: none;
+  }
 }
 .home-pulse__week-badge.is-over {
   color: color-mix(in oklch, var(--danger) 78%, var(--ink));
