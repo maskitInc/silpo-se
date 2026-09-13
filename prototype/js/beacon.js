@@ -89,6 +89,23 @@ function slotInReceipt(slotId, receipt) {
 export function beaconForLine(line, receipts, now = Date.now()) {
   const name = String(line?.name || line?.wanted || line?.role || "").trim();
   if (!name) return { kind: "none", class: null, copy: "", tip: "", daysAgo: null, slotId: null };
+  /* Explicit Sport pantry packs only (flag from week soft / resolve) — not all dairy globally. */
+  if (line?.pantryCheck || line?.pantry) {
+    const stapleHint = String(line?.staple || line?.wanted || "").trim();
+    const slot = classifySlot(name) || classifySlot(stapleHint);
+    const stats = slot ? slotStats(receiptsAsHistory(receipts), now) : null;
+    const st = slot ? stats?.byId?.[slot.id] : null;
+    const days =
+      st?.daysAgoDated != null && Number.isFinite(st.daysAgoDated) ? st.daysAgoDated : null;
+    return {
+      kind: "pantry_check",
+      class: "P3",
+      copy: days != null ? `~${Math.round(days)} дн. · перевір чи є` : "перевір чи є вдома",
+      tip: "Пакет на тиждень під стелю · зніми з чеку, якщо вже є. Орієнтир з чеків, не інвентар.",
+      daysAgo: days,
+      slotId: slot?.id || null,
+    };
+  }
   const slot = classifySlot(name);
   if (!slot) return { kind: "none", class: null, copy: "", tip: "", daysAgo: null, slotId: null };
   const cls = freshnessClassOf(slot);

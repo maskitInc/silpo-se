@@ -13,6 +13,7 @@ import {
   planCartMerge,
 } from "./normalize.js";
 import { bootstrapCart } from "./bootstrap.mjs";
+import { pantryFieldsFromQuery } from "../pantry-staples.js";
 import { callTool, connectMcp } from "./client.mjs";
 import { loadCategoryTree, productsByCategoryPopularity, slugsForStaple } from "./catalog.mjs";
 import {
@@ -204,8 +205,27 @@ export async function resolveViaMcp(shopQueries, { token, confirmed = false, his
           : kind;
     let p = swapped
       ? pickById(pool, q.productId) || pickExactName(pool, q.q)
-      : pickMatchingProduct(pool, staple, { freq: historyFreq, kind: kindPrefer, staple, hint, ...band });
-    pending.push({ q, staple, keys, kind: kindPrefer, band, pool, swapped, histNames, hint, p });
+      : pickMatchingProduct(pool, staple, {
+          freq: historyFreq,
+          kind: kindPrefer,
+          staple,
+          hint,
+          dayISO: q.dayISO || context.dayISO || "",
+          ...band,
+        });
+    pending.push({
+      q,
+      staple,
+      keys,
+      kind: kindPrefer,
+      band,
+      pool,
+      swapped,
+      histNames,
+      hint,
+      p,
+      dayISO: q.dayISO || context.dayISO || "",
+    });
   }
 
   // One shared history_retry batch for all misses (was N sequential MCP calls).
@@ -240,6 +260,7 @@ export async function resolveViaMcp(shopQueries, { token, confirmed = false, his
             kind: row.kind,
             staple: row.staple,
             hint: row.hint,
+            dayISO: row.dayISO,
             ...row.band,
           });
         }
@@ -277,6 +298,7 @@ export async function resolveViaMcp(shopQueries, { token, confirmed = false, his
           kind: row.kind,
           staple: row.staple,
           hint: row.hint,
+          dayISO: row.dayISO,
           ...row.band,
         });
         if (!row.p) {
@@ -287,6 +309,7 @@ export async function resolveViaMcp(shopQueries, { token, confirmed = false, his
             hint: row.hint,
             allowCatalogFallback: true,
             allowKindFallback: true,
+            dayISO: row.dayISO,
             ...row.band,
           });
         }
@@ -298,6 +321,7 @@ export async function resolveViaMcp(shopQueries, { token, confirmed = false, his
             staple: row.staple,
             hint: row.hint,
             allowCatalogFallback: true,
+            dayISO: row.dayISO,
             ...row.band,
           }) || row.p;
       }
@@ -338,6 +362,7 @@ export async function resolveViaMcp(shopQueries, { token, confirmed = false, his
             hint: row.hint,
             allowCatalogFallback: true,
             allowKindFallback: true,
+            dayISO: row.dayISO,
             ...row.band,
           });
         }
@@ -377,6 +402,7 @@ export async function resolveViaMcp(shopQueries, { token, confirmed = false, his
         why: q.why || "",
         units,
         amount: units > 1 ? `${units} шт` : packLabelFromName(q.q) || "—",
+        ...pantryFieldsFromQuery(q),
       });
       continue;
     }
@@ -386,6 +412,7 @@ export async function resolveViaMcp(shopQueries, { token, confirmed = false, his
     line.group = q.group || "";
     line.groupTitle = q.groupTitle || "";
     line.why = q.why || "";
+    Object.assign(line, pantryFieldsFromQuery(q));
     const units = Math.max(1, Number(line.units) || Number(q.units) || 1);
     line.units = units;
     // Re-sync amount/price after final units (never leave stale «N шт» on weight SKUs).

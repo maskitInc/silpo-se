@@ -11,6 +11,38 @@ export const WORKOUT_GUIDE_VERSION = "1.0.0";
 export const WORKOUT_GUIDE_CDN =
   `https://cdn.jsdelivr.net/npm/@bryllim/workout-guide@${WORKOUT_GUIDE_VERSION}`;
 
+/** Ink / pose orientation for home-today sizing (CDN frames are all 512²). */
+export const EXERCISE_ART_ORIENT = {
+  plank: "wide",
+  "push-up": "wide",
+  "knee-push-up": "wide",
+  "dead-bug": "wide",
+  "cat-cow-stretch": "wide",
+  "russian-twist": "wide",
+  "superman": "wide",
+  "childs-pose": "wide",
+  "bodyweight-squat": "tall",
+  "forward-lunge": "tall",
+  burpee: "tall",
+  "high-knees": "tall",
+  walking: "tall",
+  "seated-knee-tuck": "tall",
+  "toe-touch": "tall",
+  "leg-swings-stretch": "tall",
+  "wall-calf-stretch": "tall",
+  "arm-circles": "square",
+  "cross-body-shoulder-stretch": "square",
+  "torso-twist-stretch": "square",
+};
+
+/**
+ * @param {string} slug
+ * @returns {"wide"|"tall"|"square"}
+ */
+export function exerciseArtOrient(slug) {
+  return EXERCISE_ART_ORIENT[String(slug || "")] || "square";
+}
+
 /** Longest stems first so "Віджимання з колін" wins over "Віджимання". */
 const STEM_TO_SLUG = [
   ["дихання животом", "cat-cow-stretch"],

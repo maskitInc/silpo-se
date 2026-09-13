@@ -5,7 +5,7 @@ const SESSION_EVENTS_KEY = "silpo.sport.sessionEvents.v1";
 /**
  * Heuristic duration from UA KB strings (plank 20с × 3, 1 хв, reps × sets).
  * @param {string} label
- * @returns {number} seconds, clamped 15–180
+ * @returns {number} seconds, clamped 15–1200 (up to 20 хв cardio blocks)
  */
 export function estimateDurationSec(label) {
   const s = String(label || "");
@@ -17,14 +17,15 @@ export function estimateDurationSec(label) {
   if (secOnly) return clampSec(Number(secOnly[1]));
   const reps = s.match(/(\d+)\s*[×x]\s*(\d+)/i);
   if (reps) return clampSec(22 * Number(reps[2]));
-  const bareReps = s.match(/(\d+)\s*(раз|на ногу|на бік)/i);
+  const bareReps = s.match(/(\d+)\s*(раз|на ногу|на бік|рахунки)/i);
   if (bareReps) return clampSec(Math.max(30, Number(bareReps[1]) * 3));
   return 40;
 }
 
 function clampSec(n) {
   const v = Number(n) || 40;
-  return Math.min(180, Math.max(15, Math.round(v)));
+  /* Allow long walk / cardio blocks (up to 20 хв) so day meta matches home. */
+  return Math.min(1200, Math.max(15, Math.round(v)));
 }
 
 /**

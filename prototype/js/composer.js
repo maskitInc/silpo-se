@@ -1,6 +1,8 @@
 import { assertContent } from "./contracts.js";
 import { planCookList, groupQueries, envelopesFromHistory } from "./groups.js";
 import { profileFromIntentOrStorage, resolveMealTrainingGoal } from "./sport-profile.js";
+import { expandMealStaples } from "./meal-ration-agent.js";
+import { filterQueriesByPantryMode, tagPantryQuery } from "./pantry-staples.js";
 
 /**
  * @param {object} kb
@@ -14,7 +16,7 @@ export function sessionFor(kb, programId, level, opts = {}) {
     if (level === "intermediate" && Array.isArray(table.intermediate)) return table.intermediate;
     if (Array.isArray(table.beginner_female)) return table.beginner_female;
   }
-  return table[level] || table.beginner || ["Крок на місці 5 хв"];
+  return table[level] || table.beginner || ["Крок на місці 18 хв"];
 }
 
 const MEAL_SLOTS = ["breakfast", "lunch", "dinner"];
@@ -54,15 +56,21 @@ export function applyBodyGoalMealOverlay(goalMap, bodyGoal) {
   return out;
 }
 
-/** When cookMode is ready — swap slots to Silpo Culinary mealMap (byCookMode.ready). */
-export function applyCookModeMealOverlay(goalMap, cookMode) {
+/** When cookMode is ready — swap slots to Silpo Culinary mealMap (byCookMode.ready).
+ * If ready.course[7] exists and dayISO is set, pick that weekday (same as grocery course).
+ */
+export function applyCookModeMealOverlay(goalMap, cookMode, dayISO = "") {
   const map = goalMap && typeof goalMap === "object" ? goalMap : {};
   if (cookMode !== "ready") return map;
-  const overlay =
+  const overlayRoot =
     map.byCookMode && typeof map.byCookMode === "object" && map.byCookMode.ready && typeof map.byCookMode.ready === "object"
       ? map.byCookMode.ready
       : null;
-  if (!overlay) return map;
+  if (!overlayRoot) return map;
+  const overlay =
+    dayISO && Array.isArray(overlayRoot.course) && overlayRoot.course.length
+      ? pickMealMapForDay(overlayRoot, dayISO)
+      : overlayRoot;
   const out = { ...map };
   for (const slot of MEAL_SLOTS) {
     if (overlay[slot] == null) continue;
@@ -103,7 +111,7 @@ export function resolveTrainingMealMap(kb, programGoal, profile) {
 
 /**
  * Training mealMap slots + byBodyGoal overlay + optional byCookMode.ready (Culinary).
- * Overlay order: course → byBodyGoal → byCookMode.ready (culinary wins when ready).
+ * Overlay order: course → byBodyGoal → byCookMode.ready (culinary wins when ready; ready.course[day] if present).
  * @param {object} kb
  * @param {string} [programGoal]
  * @param {object} [profile]
@@ -120,7 +128,7 @@ export function resolveGoalMealMap(kb, programGoal, profile, opts = {}) {
     { ...base, byBodyGoal: raw.byBodyGoal, byCookMode: raw.byCookMode },
     bodyGoal,
   );
-  return applyCookModeMealOverlay(withBody, opts.cookMode);
+  return applyCookModeMealOverlay(withBody, opts.cookMode, dayISO || "");
 }
 
 /**
@@ -170,46 +178,58 @@ export function mealCookChipUa(cook) {
   return "";
 }
 
-/** Expand mealMaps entry → shopQueries (dish title on groupTitle; unique ingredient roles). */
-export function sportShopQueriesFromMealMap(meals) {
+/**
+ * Expand mealMaps entry → shopQueries (dish title on groupTitle; unique ingredient roles).
+ * @param {object} meals
+ * @param {{ dayISO?: string, pantryMode?: 'include'|'exclude'|'only' }} [opts]
+ *   include — week Express (packs once); exclude — day plates (no oil 0.85L / rice 1kg / yogurt tub).
+ */
+export function sportShopQueriesFromMealMap(meals, { dayISO = "", pantryMode = "include" } = {}) {
   const map = meals && typeof meals === "object" ? meals : {};
   const out = [];
+  const dayBit = dayISO ? { dayISO: String(dayISO) } : {};
   for (const slot of MEAL_SLOTS) {
     const raw = map[slot];
     if (raw == null) continue;
     if (typeof raw === "string") {
       const staple = String(raw).trim();
       if (!staple) continue;
-      out.push({
-        q: staple,
-        staple,
-        role: slot,
-        envelope: "food",
-        group: slot,
-        groupTitle: staple,
-        why: staple,
-      });
+      out.push(
+        tagPantryQuery({
+          q: staple,
+          staple,
+          role: slot,
+          envelope: "food",
+          group: slot,
+          groupTitle: staple,
+          why: staple,
+          ...dayBit,
+        }),
+      );
       continue;
     }
     const title = String(raw.title || slot).trim() || slot;
     const cook = normalizeMealCook(raw.cook);
-    const staples = Array.isArray(raw.staples) ? raw.staples : [];
+    const staples = expandMealStaples(title, Array.isArray(raw.staples) ? raw.staples : []);
     for (const s of staples) {
       const staple = String(s || "").trim();
       if (!staple) continue;
-      out.push({
-        q: staple,
-        staple,
-        role: `${slot}:${staple}`.slice(0, 24),
-        envelope: "food",
-        group: slot,
-        groupTitle: title,
-        why: title,
-        ...(cook ? { cook } : {}),
-      });
+      out.push(
+        tagPantryQuery({
+          q: staple,
+          staple,
+          role: `${slot}:${staple}`.slice(0, 24),
+          envelope: "food",
+          group: slot,
+          groupTitle: title,
+          why: title,
+          ...(cook ? { cook } : {}),
+          ...dayBit,
+        }),
+      );
     }
   }
-  return out;
+  return filterQueriesByPantryMode(out, pantryMode);
 }
 
 export function compose(intent, kb) {
@@ -222,7 +242,8 @@ export function compose(intent, kb) {
       type: "workout_program",
       title: program.title,
       blocks: sessionFor(kb, program.id, intent.constraints.level, { sex: profile.sex }),
-      shopQueries: sportShopQueriesFromMealMap(meals),
+      /* Day-facing compose: no bulk pantry packs (oil 0.85L / rice 1kg / yogurt tub). */
+      shopQueries: sportShopQueriesFromMealMap(meals, { pantryMode: "exclude" }),
       variants: [
         {
           id: "walk",

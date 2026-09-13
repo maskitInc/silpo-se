@@ -1,11 +1,14 @@
 /**
- * Sport body profile (v0) — sex / age / height / weight / body goal.
+ * Sport body profile (v0) — sex / age / height / weight / body goal / target weight.
  * Separate from taste survey (sport-survey.js). Not medical advice.
  * Sex feeds soft kcal target (Mifflin-St Jeor × activity) + program ranking;
  * female CDN exercise art is still unavailable (exercise-art-map.js).
  */
 
 export const SPORT_PROFILE_KEY = "silpo.sport.profileV0.v1";
+
+/** Soft default Δkg when switching to lose (−) or gain (+). */
+export const TARGET_WEIGHT_DEFAULT_DELTA_KG = 7;
 
 export const BODY_GOALS = [
   { id: "lose", label: "скинути" },
@@ -32,6 +35,23 @@ export const TRAINING_GOAL_UA = {
   mobility: "мобільність",
 };
 
+/**
+ * Soft program pace vs afrobeat reference (~3 months for 7 kg @ soft adherence).
+ * Higher = faster toward target (heuristic, not MET science).
+ */
+export const PROGRAM_PACE = {
+  afrobeat: 1.0,
+  military: 1.05,
+  calisthenics: 0.95,
+  stretch: 0.55,
+  "core-mobility": 0.6,
+  "chair-yoga": 0.5,
+  "tai-chi": 0.45,
+};
+
+/** Afrobeat baseline months for a 7 kg gap (product narrative). */
+export const REF_MONTHS_PER_7KG = 3;
+
 export function trainingGoalLabel(goal) {
   const g = String(goal || "");
   return TRAINING_GOAL_UA[g] || g;
@@ -44,6 +64,7 @@ export function trainingGoalLabel(goal) {
  *   age: number | null,
  *   heightCm: number | null,
  *   weightKg: number | null,
+ *   targetWeightKg: number | null,
  *   bodyGoal: "lose" | "gain" | "maintain" | "",
  *   completedAt: string | null
  * }} SportProfile
@@ -57,6 +78,7 @@ export function emptySportProfile() {
     age: null,
     heightCm: null,
     weightKg: null,
+    targetWeightKg: null,
     bodyGoal: "",
     completedAt: null,
   };
@@ -70,6 +92,41 @@ function numOrNull(v, min, max) {
   return r;
 }
 
+/**
+ * Default desired weight from current weight + goal.
+ * @param {number|null|undefined} weightKg
+ * @param {"lose"|"gain"|"maintain"|""} bodyGoal
+ */
+export function defaultTargetWeightKg(weightKg, bodyGoal) {
+  const w = numOrNull(weightKg, 35, 200);
+  if (w == null || !bodyGoal) return null;
+  if (bodyGoal === "maintain") return w;
+  if (bodyGoal === "lose") return Math.max(35, w - TARGET_WEIGHT_DEFAULT_DELTA_KG);
+  if (bodyGoal === "gain") return Math.min(200, w + TARGET_WEIGHT_DEFAULT_DELTA_KG);
+  return null;
+}
+
+/**
+ * Align targetWeight with goal/weight rules (maintain mirrors; lose/gain fill ±7 when missing/invalid).
+ * @param {Partial<SportProfile>} prefs
+ * @param {{ forceDefault?: boolean }} [opts]
+ */
+export function resolveTargetWeightKg(prefs, opts = {}) {
+  const bodyGoal =
+    prefs?.bodyGoal === "lose" || prefs?.bodyGoal === "gain" || prefs?.bodyGoal === "maintain"
+      ? prefs.bodyGoal
+      : "";
+  const weightKg = numOrNull(prefs?.weightKg, 35, 200);
+  if (!bodyGoal || weightKg == null) return null;
+  if (bodyGoal === "maintain") return weightKg;
+  const force = Boolean(opts.forceDefault);
+  let target = force ? null : numOrNull(prefs?.targetWeightKg, 35, 200);
+  if (bodyGoal === "lose" && target != null && target >= weightKg) target = null;
+  if (bodyGoal === "gain" && target != null && target <= weightKg) target = null;
+  if (target == null) target = defaultTargetWeightKg(weightKg, bodyGoal);
+  return target;
+}
+
 /** @param {Partial<SportProfile>|null|undefined} raw */
 export function normalizeSportProfile(raw) {
   const base = emptySportProfile();
@@ -77,15 +134,21 @@ export function normalizeSportProfile(raw) {
   const sex = raw.sex === "female" || raw.sex === "male" ? raw.sex : "";
   const bodyGoal =
     raw.bodyGoal === "lose" || raw.bodyGoal === "gain" || raw.bodyGoal === "maintain" ? raw.bodyGoal : "";
-  return {
+  const weightKg = numOrNull(raw.weightKg, 35, 200);
+  const draft = {
     version: "profile_v0",
     sex,
     age: numOrNull(raw.age, 14, 90),
     heightCm: numOrNull(raw.heightCm, 120, 230),
-    weightKg: numOrNull(raw.weightKg, 35, 200),
+    weightKg,
     bodyGoal,
+    targetWeightKg: numOrNull(raw.targetWeightKg, 35, 200),
     completedAt: typeof raw.completedAt === "string" ? raw.completedAt : null,
   };
+  if (bodyGoal && weightKg != null) {
+    draft.targetWeightKg = resolveTargetWeightKg(draft);
+  }
+  return draft;
 }
 
 export function profileIsComplete(prefs) {
@@ -176,6 +239,23 @@ export function rankProgramsForProfile(programs, prefs) {
 }
 
 /**
+ * Maintenance TDEE (no lose/gain multiplier). Prototype heuristic.
+ * @param {SportProfile} prefs
+ * @returns {number|null}
+ */
+export function estimateMaintenanceKcalFromProfile(prefs) {
+  const p = normalizeSportProfile(prefs);
+  if (!p.sex || p.age == null || p.heightCm == null || p.weightKg == null) return null;
+  const w = p.weightKg;
+  const h = p.heightCm;
+  const a = p.age;
+  const bmr =
+    p.sex === "male" ? 10 * w + 6.25 * h - 5 * a + 5 : 10 * w + 6.25 * h - 5 * a - 161;
+  const tdee = bmr * 1.375; /* light home activity */
+  return Math.max(1400, Math.min(3500, Math.round(tdee / 50) * 50));
+}
+
+/**
  * Mifflin-St Jeor × light activity, adjusted by bodyGoal.
  * Prototype heuristic — not clinical nutrition.
  * @param {SportProfile} prefs
@@ -193,6 +273,47 @@ export function estimateDailyKcalFromProfile(prefs) {
   if (p.bodyGoal === "lose") tdee *= 0.85;
   if (p.bodyGoal === "gain") tdee *= 1.1;
   return Math.max(1400, Math.min(3500, Math.round(tdee / 50) * 50));
+}
+
+/**
+ * Soft months-to-target for a program (afrobeat ≈ 3 mo for 7 kg). Not medical advice.
+ * Optional `sessionBurnKcal` (planned complex) shortens ETA when daily training adds deficit.
+ * @param {SportProfile} prefs
+ * @param {string} programId
+ * @param {{ sessionBurnKcal?: number, sessionsPerWeek?: number }} [opts]
+ * @returns {number|null} months (1 decimal) or null when N/A
+ */
+export function estimateMonthsToWeightGoal(prefs, programId, opts = {}) {
+  const p = normalizeSportProfile(prefs);
+  if (!profileIsComplete(p) || p.bodyGoal === "maintain") return null;
+  if (p.weightKg == null || p.targetWeightKg == null) return null;
+  const delta = Math.abs(p.weightKg - p.targetWeightKg);
+  if (delta < 1) return 0;
+  if (p.bodyGoal === "lose" && p.targetWeightKg >= p.weightKg) return null;
+  if (p.bodyGoal === "gain" && p.targetWeightKg <= p.weightKg) return null;
+
+  const pace = PROGRAM_PACE[programId] || 0.7;
+  const maint = estimateMaintenanceKcalFromProfile(p) || 1850;
+  const goalKcal = estimateDailyKcalFromProfile(p);
+  const dailyDelta = Math.max(80, Math.abs(maint - goalKcal));
+  const sessionBurn = Number(opts?.sessionBurnKcal);
+  const perWeek = Math.max(1, Math.min(7, Number(opts?.sessionsPerWeek) || 5));
+  /* Spread planned session burn across the week so longer/harder complexes shorten calendar ETA. */
+  const sessionDaily =
+    Number.isFinite(sessionBurn) && sessionBurn > 0 ? (sessionBurn * perWeek) / 7 : 0;
+  const effectiveDelta = Math.max(80, dailyDelta + sessionDaily);
+  /* Narrative anchor: 7 kg @ afrobeat ≈ REF_MONTHS_PER_7KG; scale by Δkg, pace, deficit. */
+  const months =
+    (delta / TARGET_WEIGHT_DEFAULT_DELTA_KG) * (REF_MONTHS_PER_7KG / pace) * (300 / effectiveDelta);
+  return Math.max(0.5, Math.min(24, Math.round(months * 10) / 10));
+}
+
+/** UA short ETA line, e.g. "≈ 3 міс · орієнтир" */
+export function formatMonthsToGoalUa(months) {
+  if (months == null || !Number.isFinite(months)) return "";
+  if (months <= 0) return "≈ вже біля цілі";
+  const n = months < 1 ? 1 : months % 1 === 0 ? String(Math.round(months)) : months.toFixed(1).replace(".", ",");
+  return `≈ ${n} міс · орієнтир`;
 }
 
 export function profileSummaryLine(prefs) {
@@ -220,6 +341,7 @@ export function profileFromIntentOrStorage(intent) {
       age: c.age,
       heightCm: c.heightCm,
       weightKg: c.weightKg,
+      targetWeightKg: c.targetWeightKg,
       bodyGoal: c.bodyGoal,
       completedAt: c.profileAt || new Date().toISOString(),
     });

@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=390"/>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet"/>
+<style>
+  :root{
+    --cream:#faf4ee; --peach:#f3ddd2; --coral:#e86a4a; --ink:#2a2420;
+    --muted:#7a6f68; --well:#2f3d35; --leaf:#318454;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#d9cfc6;display:flex;justify-content:center;padding:12px;
+    font-family:Manrope,system-ui,sans-serif;color:var(--ink)}
+  .phone{
+    width:390px;min-height:780px;
+    background:
+      radial-gradient(110px 80px at 6% 4%, rgba(210,160,90,.28), transparent 70%),
+      radial-gradient(80px 60px at 94% 6%, rgba(110,150,110,.2), transparent 70%),
+      var(--cream);
+    border-radius:34px;padding:16px 14px 18px;position:relative;overflow:hidden;
+    box-shadow:0 16px 36px rgba(40,30,20,.16);
+  }
+  .chev{position:absolute;left:8px;top:210px;opacity:.35;color:#e09a78;font-size:11px;line-height:1.1}
+  .brand{text-align:center;margin:2px 0 12px;position:relative;z-index:1}
+  .brand span{
+    display:inline-flex;align-items:center;gap:7px;
+    background:rgba(255,255,255,.72);border-radius:999px;padding:7px 14px;
+    font-weight:800;font-size:14px;
+  }
+  .brand i{width:14px;height:14px;border-radius:50%;background:var(--leaf);display:inline-block}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;position:relative;z-index:1}
+  .sport{
+    aspect-ratio:1/1;
+    background:linear-gradient(165deg,#f9ece4,#f2d7cb);
+    border-radius:22px;padding:10px 9px 9px;
+    display:flex;flex-direction:column;gap:6px;
+    box-shadow:0 6px 16px rgba(60,40,30,.08);
+  }
+  .sport .head{display:flex;flex-direction:column;align-items:center;gap:0}
+  .sport .head img{width:64px;height:40px;object-fit:contain}
+  .sport h2{margin:0;font-family:Fraunces,serif;font-size:18px;font-weight:700;line-height:1.05}
+  .today{
+    flex:1;min-height:0;
+    display:grid;grid-template-columns:1fr 52px;gap:6px;align-items:center;
+    padding:8px;border-radius:14px;
+    background:rgba(255,255,255,.52);border:1px solid rgba(255,255,255,.5);
+  }
+  .kicker{margin:0 0 1px;font-size:10px;font-weight:800;color:var(--coral)}
+  .name{margin:0;font-family:Fraunces,serif;font-size:20px;font-weight:700;line-height:1.05}
+  .dose{margin:2px 0 0;font-size:10px;font-weight:650;color:var(--muted)}
+  .well{width:52px;height:52px;border-radius:12px;background:var(--well);display:grid;place-items:center;overflow:hidden}
+  .well img{width:90%;height:90%;object-fit:contain}
+  .prog{display:grid;gap:3px}
+  .row{display:flex;justify-content:space-between;font-size:10px;font-weight:800}
+  .row span:last-child{font-weight:650;color:var(--muted);font-size:9px}
+  .bar{height:6px;border-radius:999px;background:rgba(255,255,255,.75);overflow:hidden}
+  .bar i{display:block;width:40%;height:100%;background:var(--coral)}
+  .cta{border:0;border-radius:999px;padding:8px;background:var(--coral);color:#fff;
+    font:inherit;font-weight:800;font-size:12px;text-align:center}
+  .express{
+    aspect-ratio:1/1;border-radius:22px;overflow:hidden;
+    box-shadow:0 6px 16px rgba(60,40,30,.08);background:#e8f0e6;
+  }
+  .express img{width:100%;height:100%;object-fit:cover;object-position:center top;display:block}
+  .month{
+    margin-top:10px;border-radius:22px;overflow:hidden;background:#fff;
+    box-shadow:0 8px 18px rgba(40,30,20,.08);position:relative;z-index:1;
+  }
+  .month img{width:100%;height:auto;display:block}
+</style>
+</head>
+<body>
+<main class="phone" id="phone">
+  <div class="chev" aria-hidden="true">▲<br>▲<br>▲</div>
+  <div class="brand"><span><i></i>СільпоSE</span></div>
+  <div class="grid">
+    <article class="sport">
+      <header class="head">
+        <img src="./sport-square/dumbbell-3d-from-h1.png" alt=""/>
+        <h2>Спорт</h2>
+      </header>
+      <section class="today">
+        <div>
+          <p class="kicker">Сьогодні</p>
+          <p class="name">Планка</p>
+          <p class="dose">20 с × 3 · ~12 хв</p>
+        </div>
+        <div class="well"><img src="./sport-square/plank-guide-frame-1.png" alt="Планка"/></div>
+      </section>
+      <div class="prog">
+        <div class="row"><span>2/5 занять</span><span>лишилось 3</span></div>
+        <div class="bar"><i></i></div>
+      </div>
+      <button class="cta" type="button">Пігнали →</button>
+    </article>
+    <div class="express"><img src="./express-square/e2-m1-stack-hero.png" alt="Експрес"/></div>
+  </div>
+  <section class="month"><img src="./month-scale-nav/h1-month-card-only.png" alt="Деталі місяця"/></section>
+</main>
+</body>
+</html>

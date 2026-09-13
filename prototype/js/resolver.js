@@ -7,6 +7,7 @@ import {
   lineTotalPrice,
   packLabelFromName,
 } from "./mcp/normalize.js";
+import { pantryFieldsFromQuery } from "./pantry-staples.js";
 
 /**
  * Фікстурний резолвер. У проді: BOOTSTRAP → find_products_batch → cart get.
@@ -80,6 +81,7 @@ export function resolveQueries(shopQueries, shelf, { confirmed = false } = {}) {
           image: q.image || "",
           sku: q.sku,
           ...(cookFromQuery(q) ? { cook: cookFromQuery(q) } : {}),
+          ...pantryFieldsFromQuery(q),
         });
         if (typeof lines.at(-1).price === "number") sum += lines.at(-1).price;
         continue;
@@ -99,6 +101,7 @@ export function resolveQueries(shopQueries, shelf, { confirmed = false } = {}) {
         amount: packLabelFromName(q.q) || "—",
         image: q.image || "",
         ...(cookFromQuery(q) ? { cook: cookFromQuery(q) } : {}),
+        ...pantryFieldsFromQuery(q),
       });
     continue;
   }
@@ -134,6 +137,7 @@ export function resolveQueries(shopQueries, shelf, { confirmed = false } = {}) {
     amount: amountLabelFromProduct(product, displayName, units),
     image: q.image || hit.image || "",
     ...(cookFromQuery(q) ? { cook: cookFromQuery(q) } : {}),
+    ...pantryFieldsFromQuery(q),
   });
   }
 

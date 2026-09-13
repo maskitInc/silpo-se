@@ -20,9 +20,10 @@ import { resolveGoalMealMap } from "./composer.js";
 
 /**
  * @typedef {{
- *   from: "sport_day" | "receipt_merge" | "base" | "browse" | "composer",
+ *   from: "sport_day" | "sport_week" | "receipt_merge" | "base" | "browse" | "composer",
  *   programId?: string,
- *   rationRole?: string
+ *   rationRole?: string,
+ *   dayISO?: string
  * }} ExpressLineProvenance
  */
 
@@ -48,31 +49,37 @@ export function emptySportRationPlan(opts = {}) {
 }
 
 /**
- * Tag an extraQueries row with Sport day provenance.
+ * Tag an extraQueries row with Sport day/week provenance.
  * @param {object} extra
- * @param {{ programId?: string, role?: string, staple?: string }} sportRation
+ * @param {{ programId?: string, role?: string, staple?: string, dayISO?: string, from?: "sport_day"|"sport_week" }} sportRation
  */
 export function withSportDayProvenance(extra, sportRation = {}) {
   const programId = String(sportRation.programId || "").trim();
   const rationRole = String(sportRation.role || "").trim();
+  const dayISO = String(sportRation.dayISO || "").trim();
+  const from = sportRation.from === "sport_week" ? "sport_week" : "sport_day";
   /** @type {ExpressLineProvenance} */
   const provenance = {
-    from: "sport_day",
+    from,
     ...(programId ? { programId } : {}),
     ...(rationRole ? { rationRole } : {}),
+    ...(dayISO ? { dayISO } : {}),
   };
+  const lead = from === "sport_week" ? "з тижня" : "з програми";
+  const pantry = Boolean(sportRation.pantryCheck || sportRation.pantry);
   return {
     ...extra,
     ...provenance,
+    ...(pantry ? { pantry: true, pantryCheck: true } : {}),
     why: programId
-      ? `з програми · ${String(extra.groupTitle || extra.group || "полиця")}`
-      : String(extra.why || "з програми"),
+      ? `${lead}${pantry ? " · шафа" : ""} · ${String(extra.groupTitle || extra.group || "полиця")}`
+      : String(extra.why || lead),
   };
 }
 
-/** Count extras that came from Sport day handoff. */
+/** Count extras that came from Sport day or week handoff. */
 export function countSportDayExtras(extraQueries = []) {
-  return (extraQueries || []).filter((q) => q?.from === "sport_day").length;
+  return (extraQueries || []).filter((q) => q?.from === "sport_day" || q?.from === "sport_week").length;
 }
 
 /**

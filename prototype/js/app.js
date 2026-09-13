@@ -43,8 +43,10 @@ import {
   BODY_GOALS,
   SEX_OPTIONS,
   bodyGoalLabel,
+  defaultTargetWeightKg,
   emptySportProfile,
   estimateDailyKcalFromProfile,
+  estimateMonthsToWeightGoal,
   loadSportProfile,
   normalizeSportProfile,
   profileIsComplete,
@@ -52,6 +54,7 @@ import {
   programsForHome,
   rankProgramsForProfile,
   resolveMealTrainingGoal,
+  resolveTargetWeightKg,
   saveSportProfile,
   sexLabel,
   suggestLevelFromProfile,
@@ -60,8 +63,19 @@ import {
 } from "./sport-profile.js";
 import { countSportDayExtras, mealsAddableToExpress, withSportDayProvenance } from "./sport-ration-plan.js";
 import {
+  buildWeekRationSoftQueries,
+  clampWeekBudgetUah,
+  pickCollapsedWeekThumbs,
+  weekDayChipLabel,
+  weekDayISOs,
+  weekDayPlateUahHintCopy,
+} from "./sport-week-ration.js";
+import { dayPlatePantryHintCopy, isPantryStaple } from "./pantry-staples.js";
+import { expandMealStaples } from "./meal-ration-agent.js";
+import {
   loadActiveContentSourceId,
   mergeKbWithContentSource,
+  resolveActiveContentSource,
   saveActiveContentSourceId,
 } from "./content-source.js";
 import {
@@ -131,7 +145,9 @@ import {
   weekStartISO,
 } from "./spend.js";
 import {
-  noteSportProgramChosen,
+  confirmSportProgramChoice,
+  hasChosenSportProgram,
+  loadChosenSportProgramId,
   noteSportRationCoverage,
   loadSportSessionGoal,
   saveSportSessionGoal,
@@ -159,10 +175,12 @@ import {
 import {
   EXERCISE_ART_ATTRIBUTION,
   EXERCISE_ART_INTENTIONAL_NULL,
+  exerciseArtOrient,
   normalizeExerciseStem,
   resolveExerciseArt,
   resolvePickerThumbArt,
 } from "./exercise-art-map.js";
+import { resolveDishArt } from "./dish-art-map.js";
 import { programPickerMetaLine, resolveProgramThumb } from "./program-art-map.js";
 import {
   canSpeakExerciseHowTo,
@@ -241,25 +259,72 @@ function brandMarkHtml(opts = {}) {
   return `<${tag} class="brand-mark brand-mark--${esc(size)}${extra}" aria-label="${esc(label)}">${parts.join("")}</${tag}>`;
 }
 
-function sportProfileHeroBandHtml(profile) {
+function sportProfileHeroBandHtml(profile, { programTitle = "", buttonId = "editProfile" } = {}) {
   const saved = normalizeSportProfile(profile);
   const profileLine = profileSummaryLine(saved);
   const kcalBudget = estimateDailyKcalFromProfile(saved);
   const profileAvatarInitial = esc(String(sexLabel(saved.sex) || "?").slice(0, 1));
-  return `<button type="button" class="sport-profile__hero-band" id="editProfile" aria-label="Змінити профіль: ${esc(profileLine)}, ≈ ${kcalBudget} ккал">
+  const subLine = programTitle
+    ? `≈ ${kcalBudget} ккал · ${programTitle}`
+    : `≈ ${kcalBudget} ккал · орієнтир`;
+  const ariaExtra = programTitle ? `, програма ${programTitle}` : "";
+  return `<button type="button" class="sport-profile__hero-band" id="${esc(buttonId)}" aria-label="Змінити профіль: ${esc(profileLine)}, ≈ ${kcalBudget} ккал${esc(ariaExtra)}">
         <span class="sport-profile__hero-avatar" aria-hidden="true">${profileAvatarInitial}</span>
         <span class="sport-profile__hero-copy">
           <span class="sport-profile__hero-line">${esc(profileLine)}</span>
-          <span class="sport-profile__hero-kcal">≈ ${kcalBudget} ккал · орієнтир</span>
+          <span class="sport-profile__hero-kcal">${esc(subLine)}</span>
         </span>
         <span class="sport-profile__hero-edit" aria-hidden="true">Змінити</span>
       </button>`;
 }
 
-function bindSportProfileHeroBand({ programId } = {}) {
-  const btn = $("#editProfile");
+/** Onboard step-2 collapsed plate (Крок 2 + hero-band). */
+function homeProfileStepPlateHtml(profile) {
+  return `
+    <section class="onboard-steps onboard-steps--plate" aria-label="Профіль">
+      <div class="onboard-profile-plate">
+        <p class="onboard-step__kicker">Крок 2</p>
+        ${sportProfileHeroBandHtml(profile)}
+      </div>
+    </section>`;
+}
+
+/** Ready-home identity plate between SE header and Sport strip. */
+function homeReadyIdentityPlateHtml(profile, programTitle) {
+  return `
+    <div class="home-identity-plate" aria-label="Профіль і програма">
+      ${sportProfileHeroBandHtml(profile, { programTitle, buttonId: "editHomeProfile" })}
+    </div>`;
+}
+
+function currentSportProgramTitle() {
+  const id =
+    state.intentSport?.constraints?.programId ||
+    loadChosenSportProgramId() ||
+    ensureHomeSportProgram() ||
+    "";
+  const p = (state.kb?.programs || []).find((x) => x.id === id);
+  return p?.title ? String(p.title) : "";
+}
+
+/** Leave ready home safely — open combined profile+program editor on `#/sport`. */
+function openSportProfileProgramEdit({ programId } = {}) {
+  if (programId) destroySessionCtl(programId);
+  state._sportCombinedEdit = true;
+  state._sportProfilePolishOnce = false;
+  state.profileDraft = normalizeSportProfile(loadSportProfile());
+  state.sportProgramPickerOpen = false;
+  go("sport");
+}
+
+function bindSportProfileHeroBand({ programId, buttonId = "editProfile" } = {}) {
+  const btn = buttonId === "editProfile" ? $("#editProfile") : document.getElementById(buttonId);
   if (!btn) return;
   btn.onclick = () => {
+    if (hasChosenSportProgram()) {
+      openSportProfileProgramEdit({ programId });
+      return;
+    }
     if (programId) destroySessionCtl(programId);
     state.profileDraft = normalizeSportProfile(loadSportProfile());
     state.sportProgramPickerOpen = false;
@@ -365,6 +430,8 @@ const state = {
   sportTab: "wheel",
   /** Sheet: program list on sport home. */
   sportProgramPickerOpen: false,
+  /** Combined profile+program edit from home plate / day «змінити». */
+  _sportCombinedEdit: false,
   /** Picker goal filter: "" | cardio | strength | mobility */
   sportProgramGoalFilter: "",
   navLock: false,
@@ -402,7 +469,17 @@ const state = {
   sportPulseMonthKey: null,
   /** @type {string|null} Sport day screen selected ISO (YYYY-MM-DD); default today */
   dayISO: null,
-  /** Day plates VM cache — fingerprint ignores dayISO (session/plates don't vary by calendar day). */
+  /** day | week — ration chrome scope on #/day */
+  sportRationScope: "day",
+  /** Week accordion: iso → include in bulk add (default true) */
+  /** @type {Record<string, boolean>} */
+  weekDayIncluded: {},
+  /** Visited day meal summaries for collapsed thumbs/sum */
+  /** @type {Record<string, { sum: number, thumbs: Array<{ image?: string, name?: string }> }>} */
+  weekDayCache: {},
+  /** After week→cart confirm: accept + push once shop VM settles */
+  _pushCartAfterShopResolve: false,
+  /** Day plates VM cache — fingerprint includes dayISO (course staples vary by weekday). */
   /** @type {null | { fp: string, vm: object }} */
   _dayVmCache: null,
   /** Soft dayISO hop: session player re-sync without full paint (set by bindSessionPlayer). */
@@ -1813,7 +1890,7 @@ function shopPantryNudgeOpts() {
 
 /** After program pick: survey once, then day. */
 function enterSportDay({ editSurvey = false } = {}) {
-  noteSportProgramChosen();
+  confirmSportProgramChoice(state.intentSport?.constraints?.programId || "");
   stampSportProfileOnIntent();
   invalidateDayVmCache();
   if (editSurvey || !surveyIsComplete(loadSportSurvey())) {
@@ -2496,7 +2573,7 @@ async function pushShopCartToSilpo() {
     rememberCheckoutLinks(data);
     const sportLinked =
       Boolean(state.sportHandoff) ||
-      (state.extraQueries || []).some((q) => q?.from === "sport_day");
+      (state.extraQueries || []).some((q) => q?.from === "sport_day" || q?.from === "sport_week");
     if (sportLinked) {
       state.handoffMetrics = bumpHandoffMetric(state.handoffMetrics, "confirm_sport");
     }
@@ -2570,11 +2647,12 @@ function stampSportProfileOnIntent() {
   c.age = p.age;
   c.heightCm = p.heightCm;
   c.weightKg = p.weightKg;
+  c.targetWeightKg = p.targetWeightKg;
   c.bodyGoal = p.bodyGoal;
   c.profileAt = p.completedAt || "";
 }
 
-/** Cache key for day VM — not dayISO (KB session + ration queries are day-agnostic). */
+/** Cache key for day VM — includes dayISO (week-course staples differ by weekday). */
 function dayVmFingerprint() {
   const c = state.intentSport?.constraints || {};
   const prefs = loadSportSurvey();
@@ -2590,11 +2668,14 @@ function dayVmFingerprint() {
     sex: c.sex || "",
     bodyGoal: c.bodyGoal || "",
     age: c.age ?? "",
+    targetWeightKg: c.targetWeightKg ?? "",
+    dayISO: currentDayISO(),
   });
 }
 
-function invalidateDayVmCache() {
+function invalidateDayVmCache({ keepWeekSummaries = false } = {}) {
   state._dayVmCache = null;
+  if (!keepWeekSummaries) state.weekDayCache = {};
 }
 
 async function resolveVm(intent, extra = {}) {
@@ -2625,32 +2706,942 @@ async function resolveVm(intent, extra = {}) {
   }
 }
 
+/** Keep chart fn in tree; home ready screen hides it until we bring the graph back. */
+const SHOW_HOME_SPORT_CHART = false;
+
+function silpoAccountConnected() {
+  try {
+    /* Jury/dev: force connect step without clearing server token. */
+    if (new URLSearchParams(location.search).get("demoConnect") === "1") return false;
+  } catch {
+    /* ignore */
+  }
+  return Boolean(state.mcpStatus?.tokenOnServer) || state.mcpStatus?.mode === "static_host";
+}
+
+/** Home soft-gate substep before ready session card. */
+function homeOnboardSubstep() {
+  if (!silpoAccountConnected()) return "connect";
+  if (state.profileDraft || state._sportProfilePolishOnce || !profileIsComplete(loadSportProfile())) {
+    return "profile";
+  }
+  if (!hasChosenSportProgram()) return "program";
+  return "done";
+}
+
+/** Home soft-gate: onboard (connect → profile → program) → ready session card. */
+function homeGatePhase() {
+  return homeOnboardSubstep() === "done" ? "ready" : "onboard";
+}
+
+/** Draft ready to save (same fields as save handler, before completedAt stamp). */
+function sportProfileDraftReady(draft) {
+  return !sportProfileDraftGap(draft);
+}
+
+/** Human-readable gap for CTA (empty string = ready). */
+function sportProfileDraftGap(draft) {
+  const next = normalizeSportProfile({
+    ...draft,
+    targetWeightKg: resolveTargetWeightKg(draft || {}),
+  });
+  if (!next.sex) return "Оберіть стать";
+  if (next.age == null) return "Вкажіть вік";
+  if (next.heightCm == null) return "Вкажіть зріст";
+  if (next.weightKg == null) return "Вкажіть вагу";
+  if (!next.bodyGoal) return "Оберіть ціль";
+  if (next.bodyGoal === "lose" || next.bodyGoal === "gain") {
+    if (next.targetWeightKg == null) return "Вкажіть бажану вагу";
+    if (next.bodyGoal === "lose" && next.targetWeightKg >= next.weightKg) {
+      return "Бажана вага має бути менша за поточну";
+    }
+    if (next.bodyGoal === "gain" && next.targetWeightKg <= next.weightKg) {
+      return "Бажана вага має бути більша за поточну";
+    }
+  }
+  return "";
+}
+
+function homeSilpoChipHtml({ hasToken, staticHost, connectCta = "Підключитися" } = {}) {
+  if (hasToken) {
+    return `<span class="home-nav__mcp is-on" role="status"><span class="home-nav__mcp-dot" aria-hidden="true"></span>підключено</span>`;
+  }
+  if (staticHost) {
+    return `<span class="home-nav__mcp is-off" role="status" title="Живий логін Сільпо — локально: node server.mjs">демо</span>`;
+  }
+  return `<a class="home-nav__mcp is-off" href="/auth/start" data-auth-start>${esc(connectCta)}</a>`;
+}
+
+function daysLeftUa(n) {
+  const num = Math.max(0, Math.round(Number(n) || 0));
+  const mod10 = num % 10;
+  const mod100 = num % 100;
+  if (mod100 >= 11 && mod100 <= 14) return `${num} днів`;
+  if (mod10 === 1) return `${num} день`;
+  if (mod10 >= 2 && mod10 <= 4) return `${num} дні`;
+  return `${num} днів`;
+}
+
+function estimateSessionBurnKcal(minutes, weightKg) {
+  const min = Math.max(15, Number(minutes) || 15);
+  const w = Math.max(40, Number(weightKg) || 70);
+  /* Circuit MET ~7 — targets ~100–150 ккал for 15–20 хв sessions. */
+  return Math.max(100, Math.min(220, Math.round(((7 * 3.5 * w) / 200) * min)));
+}
+
+/** Home card: planned seconds from label without the player 180s clamp (honest complex total). */
+function homePlannedStepSec(label) {
+  const s = String(label || "");
+  const minM = s.match(/(\d+)\s*хв/i);
+  if (minM) return Math.min(1200, Math.max(15, Number(minM[1]) * 60));
+  const secSets = s.match(/(\d+)\s*с\s*[×x]\s*(\d+)/i);
+  if (secSets) return Math.min(1200, Math.max(15, Number(secSets[1]) * Number(secSets[2])));
+  const secOnly = s.match(/(\d+)\s*с\b/i);
+  if (secOnly) return Math.min(1200, Math.max(15, Number(secOnly[1])));
+  const reps = s.match(/(\d+)\s*[×x]\s*(\d+)/i);
+  if (reps) return Math.min(1200, Math.max(15, 22 * Number(reps[2])));
+  const bareReps = s.match(/(\d+)\s*(раз|на ногу|на бік|рахунки)/i);
+  if (bareReps) return Math.min(1200, Math.max(30, Number(bareReps[1]) * 3));
+  return 40;
+}
+
+/** Totals for the full planned complex (all steps + short transitions). */
+function homeComplexTotals(steps, weightKg) {
+  const list = Array.isArray(steps) ? steps : [];
+  const workSec = list.reduce((sum, st) => sum + homePlannedStepSec(st.label), 0);
+  const transitionSec = list.length > 1 ? 15 * (list.length - 1) : 0;
+  const sessionSec = workSec + transitionSec;
+  /* Soft floor 15 хв so home never under-promises after KB enrichment. */
+  const minutes = Math.max(15, Math.round(sessionSec / 60));
+  const burn = estimateSessionBurnKcal(minutes, weightKg);
+  return { minutes, burn, sessionSec, stepCount: list.length };
+}
+
+function homeTodayStatsHtml({ minutes, burn }) {
+  return `
+          <div class="home-today__stats" role="list" aria-label="За весь комплекс вправ">
+            <div class="home-today__stat" role="listitem">
+              <span class="home-today__stat-k">час комплексу</span>
+              <strong class="home-today__stat-v num">≈ ${minutes} хв</strong>
+            </div>
+            <div class="home-today__stat" role="listitem">
+              <span class="home-today__stat-k">скинемо</span>
+              <strong class="home-today__stat-v num">≈ ${burn} ккал</strong>
+            </div>
+          </div>`;
+}
+
+function ensureHomeSportProgram() {
+  stampSportProfileOnIntent();
+  const profile = loadSportProfile();
+  const c = state.intentSport.constraints;
+  if (!c.level) c.level = suggestLevelFromProfile(profile) || "beginner";
+  const savedId = loadChosenSportProgramId();
+  if (savedId) c.programId = savedId;
+  if (!c.programId) {
+    const ranked = rankProgramsForProfile(programsForHome(state.kb?.programs || []), profile);
+    if (ranked[0]) c.programId = ranked[0].id;
+  }
+  return c.programId || "";
+}
+
+function homeOnboardHeroHtml() {
+  return `
+    <figure class="onboard-hero">
+      <img class="onboard-hero__img" src="/content/onboard-hero.png?v=dyn1" alt="" width="1280" height="720" decoding="async" />
+      <figcaption class="onboard-hero__cap">
+        ${brandMarkHtml({ product: "sport", size: "hero", tag: "span", className: "onboard-hero__brand" })}
+        <span class="onboard-hero__tag">рух + полиця Сільпо</span>
+      </figcaption>
+    </figure>`;
+}
+
+function homeConnectStepHtml({ hasToken, staticHost }) {
+  const chip = homeSilpoChipHtml({ hasToken, staticHost, connectCta: "Підключитися" });
+  const connected = hasToken || staticHost;
+  return `
+    <section class="onboard-steps" aria-label="Підключення">
+      <article class="onboard-step${connected ? " is-done" : " is-active"}">
+        <div class="onboard-step__copy">
+          <p class="onboard-step__kicker">Крок 1</p>
+          <h2 class="onboard-step__title">Підключення до Сільпо</h2>
+          <p class="onboard-step__lede muted">Щоб бачити чеки й полицю з твого акаунту — офіційний сервіс Сільпо.</p>
+        </div>
+        <div class="onboard-step__action">${chip}</div>
+      </article>
+    </section>`;
+}
+
+/** Ranked program list + filter HTML shared by home step 3 and `#/sport`. */
+function sportProgramPickerModel(savedProfile) {
+  let programs = programsForHome(state.kb?.programs || []);
+  if (!programs.length) programs = state.kb?.programs || [];
+  const ranked = rankProgramsForProfile(programs, savedProfile);
+  if (ranked.length) programs = ranked;
+  let idx = Math.max(
+    0,
+    programs.findIndex((p) => p.id === state.intentSport.constraints.programId),
+  );
+  if (idx < 0 || !programs[idx]) {
+    idx = 0;
+    if (programs[0]) state.intentSport.constraints.programId = programs[0].id;
+  }
+  const current = programs[idx] || programs[0];
+  const suggestedIds = new Set(programs.slice(0, 3).map((p) => p.id));
+  const levelForArt = state.intentSport?.constraints?.level || "beginner";
+  const goalFilter = state.sportProgramGoalFilter || "";
+  const listed = goalFilter ? programs.filter((p) => p.goal === goalFilter) : programs;
+  const catOptions = [{ id: "", label: "усі" }, ...Object.entries(TRAINING_GOAL_UA).map(([id, label]) => ({ id, label }))];
+  const catSelectHtml = catOptions
+    .map(
+      (c) =>
+        `<option value="${esc(c.id)}"${goalFilter === c.id ? " selected" : ""}>${esc(c.label)}</option>`,
+    )
+    .join("");
+  const programListHtml = listed.length
+    ? listed
+        .map((p) => {
+          const on = p.id === current?.id;
+          const suggested = suggestedIds.has(p.id);
+          const steps = sessionFor(state.kb, p.id, levelForArt, { sex: savedProfile.sex }) || [];
+          const thumbArt = resolveProgramThumb(p.id, steps);
+          const letter = esc(String(p.title || "?").slice(0, 1));
+          const thumb = thumbArt
+            ? `<span class="sport-rec__thumb sport-rec__thumb--photo"><img src="${esc(thumbArt.url)}" alt="" width="64" height="64" loading="lazy" decoding="async" data-letter="${letter}" onerror="window.__programThumbFallback&&window.__programThumbFallback(this)" /></span>`
+            : `<span class="sport-rec__thumb sport-rec__thumb--letter" aria-hidden="true">${letter}</span>`;
+          const badges = suggested ? `<span class="sport-rec__badge">для вас</span>` : "";
+          const meta = programPickerMetaLine(p, savedProfile, on);
+          const radio = on
+            ? `<span class="sport-rec__radio sport-rec__radio--on" aria-hidden="true"><span class="sport-rec__radio-check">✓</span></span>`
+            : `<span class="sport-rec__radio" aria-hidden="true"></span>`;
+          return `<button type="button" class="sport-rec${suggested ? " is-suggested" : ""}${on ? " is-on" : ""}" data-program-id="${esc(p.id)}" role="option" aria-selected="${on ? "true" : "false"}">
+        ${thumb}
+        <span class="sport-rec__body">
+          <span class="sport-rec__title-row"><strong class="sport-rec__title">${esc(p.title)}</strong>${badges}</span>
+          <span class="muted sport-rec__meta">${esc(meta)}</span>
+        </span>
+        ${radio}
+      </button>`;
+        })
+        .join("")
+    : `<p class="muted sport-program-picker__empty">Немає програм у цій категорії</p>`;
+  return { programs, current, catSelectHtml, programListHtml };
+}
+
+function sportProgramPickerBlockHtml({ catSelectHtml, programListHtml, title = "Обрати програму" } = {}) {
+  return `
+      <div class="sport-pick__programs">
+        <div class="sport-pick__programs-head">
+          <strong class="sport-pick__programs-title">${esc(title)}</strong>
+        </div>
+        <div class="sport-pick__toolbar">
+          <button type="button" class="sport-pick__filter-pill sport-pick__level-pill" id="level" aria-label="Рівень: ${levelUa()}">
+            <span class="sport-pick__filter-pill-label">Рівень</span>
+            <span class="sport-pick__filter-pill-value">${levelUa()} <span class="chev" aria-hidden="true">▾</span></span>
+          </button>
+          <label class="sport-pick__filter-pill sport-pick__category-pill">
+            <span class="sport-pick__filter-pill-label">Категорія</span>
+            <span class="sport-pick__filter-pill-field">
+              <select id="goalFilter" aria-label="Категорія програм">${catSelectHtml}</select>
+              <span class="chev" aria-hidden="true">▾</span>
+            </span>
+          </label>
+        </div>
+        <div class="sport-pick__catalog" id="sport-picker-panel" role="listbox" aria-label="Програми вдома">
+          <div class="sport-rec-list">${programListHtml}</div>
+        </div>
+      </div>`;
+}
+
+function bindSportProgramPickerChrome() {
+  const goalFilterEl = $("#goalFilter");
+  if (goalFilterEl) {
+    goalFilterEl.onchange = () => {
+      state.sportProgramGoalFilter = goalFilterEl.value || "";
+      render();
+    };
+  }
+  const levelEl = $("#level");
+  if (levelEl) {
+    levelEl.onclick = () => {
+      state.intentSport.constraints.level =
+        state.intentSport.constraints.level === "beginner" ? "intermediate" : "beginner";
+      render();
+    };
+  }
+  root.querySelectorAll("[data-program-id]").forEach((btn) => {
+    btn.onclick = () => {
+      state.intentSport.constraints.programId = btn.dataset.programId;
+      render();
+    };
+  });
+  const catalog = root.querySelector(".sport-pick__catalog");
+  if (catalog) {
+    catalog.onwheel = (e) => {
+      if (catalog.scrollHeight <= catalog.clientHeight) return;
+      if (!e.target.closest(".sport-rec")) return;
+      catalog.scrollTop += e.deltaY;
+      e.preventDefault();
+    };
+  }
+}
+
+function sportProfileFormFieldsHtml(draft, { locked = false } = {}) {
+  const lockAttrs = locked ? " disabled aria-disabled=\"true\"" : "";
+  const sexBits = SEX_OPTIONS.map(
+    (s) =>
+      `<button type="button" class="day-walk__chip sport-profile__chip-opt${draft.sex === s.id ? " is-on" : ""}" data-sex="${s.id}" aria-pressed="${draft.sex === s.id ? "true" : "false"}"${lockAttrs}>${esc(s.label)}</button>`,
+  ).join("");
+  const goalBits = BODY_GOALS.map(
+    (g) =>
+      `<button type="button" class="day-walk__chip sport-profile__chip-opt${draft.bodyGoal === g.id ? " is-on" : ""}" data-body-goal="${g.id}" aria-pressed="${draft.bodyGoal === g.id ? "true" : "false"}"${lockAttrs}>${esc(g.label)}</button>`,
+  ).join("");
+  const kcalHint =
+    !locked && profileIsComplete({ ...draft, completedAt: draft.completedAt || "x" })
+      ? estimateDailyKcalFromProfile({ ...draft, completedAt: draft.completedAt || new Date().toISOString() })
+      : null;
+  const targetDisabled = locked || draft.bodyGoal === "maintain" || !draft.bodyGoal;
+  const sexNeeded = !locked && !draft.sex;
+  return `
+        <section class="day-sheet sport-profile__card${locked ? " is-locked" : ""}" aria-label="Параметри"${locked ? ' aria-disabled="true"' : ""}>
+          ${
+            locked
+              ? `<p class="sport-profile__lock-hint muted">Спочатку підключи Сільпо — тоді можна заповнити профіль.</p>`
+              : ""
+          }
+          <p class="day-sheet__label sport-pick__section-label${sexNeeded ? " is-needed" : ""}">Стать${sexNeeded ? " · обовʼязково" : ""}</p>
+          <div class="day-walk__presets sport-profile__sex${sexNeeded ? " is-needed" : ""}" role="group" aria-label="Стать">${sexBits}</div>
+          ${sexNeeded ? `<p class="sport-profile__need-hint">Обери жінка або чоловік — без цього далі не відкриється.</p>` : ""}
+          <p class="day-sheet__label sport-pick__section-label">Параметри</p>
+          <div class="sport-profile__metrics" role="group" aria-label="Параметри тіла">
+            <label class="sport-profile__metric"><span>Вік · р.</span><input id="profileAge" type="number" inputmode="numeric" min="14" max="90" value="${draft.age ?? ""}" placeholder="—" aria-label="Вік у роках"${lockAttrs} /></label>
+            <label class="sport-profile__metric"><span>Зріст · см</span><input id="profileHeight" type="number" inputmode="numeric" min="120" max="230" value="${draft.heightCm ?? ""}" placeholder="—" aria-label="Зріст у сантиметрах"${lockAttrs} /></label>
+            <label class="sport-profile__metric"><span>Вага · кг</span><input id="profileWeight" type="number" inputmode="numeric" min="35" max="200" value="${draft.weightKg ?? ""}" placeholder="—" aria-label="Вага в кілограмах"${lockAttrs} /></label>
+          </div>
+          <p class="day-sheet__label sport-pick__section-label">Ціль</p>
+          <div class="day-walk__presets sport-profile__goals" role="group" aria-label="Ціль">${goalBits}</div>
+          <div class="sport-profile__target" role="group" aria-label="Бажана вага">
+            <label class="sport-profile__metric sport-profile__metric--target">
+              <span>Бажана вага · кг</span>
+              <input id="profileTargetWeight" type="number" inputmode="numeric" min="35" max="200" value="${draft.targetWeightKg ?? ""}" placeholder="—" aria-label="Бажана вага в кілограмах"${targetDisabled ? " disabled" : ""} />
+            </label>
+            <p class="muted sport-profile__target-hint">${
+              locked
+                ? "доступно після підключення"
+                : draft.bodyGoal === "maintain"
+                  ? "баланс · збігається з поточною вагою"
+                  : draft.bodyGoal === "lose"
+                    ? "скинути · можна змінити (за замовч. −7 кг)"
+                    : draft.bodyGoal === "gain"
+                      ? "набрати · можна змінити (за замовч. +7 кг)"
+                      : "обери ціль — підставимо орієнтир"
+            }</p>
+          </div>
+          ${kcalHint ? `<p class="muted sport-profile__kcal">≈ ${kcalHint} ккал/день · орієнтир</p>` : ""}
+        </section>`;
+}
+
+/**
+ * Shared profile form wiring (home onboard + sport pick).
+ * @param {{ onBack?: () => void, afterSave: (saved: object) => void, requireConnected?: boolean, keepProgramId?: boolean }} opts
+ */
+function bindSportProfileForm(opts) {
+  const onBack = opts.onBack;
+  const afterSave = opts.afterSave;
+  const requireConnected = Boolean(opts.requireConnected);
+  const keepProgramId = Boolean(opts.keepProgramId);
+  const backEl = $("#back");
+  if (backEl && onBack) backEl.onclick = () => onBack();
+
+  const syncSaveEnabled = () => {
+    const btn = $("#saveProfile");
+    if (!btn) return;
+    const connectedOk = !requireConnected || silpoAccountConnected();
+    const gap = sportProfileDraftGap(state.profileDraft);
+    const ready = connectedOk && !gap;
+    btn.disabled = !ready;
+    btn.setAttribute("aria-disabled", ready ? "false" : "true");
+    if (!connectedOk) {
+      btn.textContent = "Підключи Сільпо, щоб продовжити";
+      btn.title = "Спочатку підключи Сільпо";
+    } else if (!ready) {
+      btn.textContent = gap || "Заповніть профіль";
+      btn.title = gap || "Заповніть стать, вік, зріст, вагу і ціль";
+    } else {
+      btn.textContent = btn.dataset.readyLabel || "Далі · програма →";
+      btn.removeAttribute("title");
+    }
+  };
+
+  const syncDraft = () => {
+    const weightRaw = $("#profileWeight")?.value;
+    const goal = state.profileDraft?.bodyGoal || "";
+    const targetEl = $("#profileTargetWeight");
+    const targetRaw =
+      goal === "maintain" || !goal
+        ? weightRaw
+        : targetEl && !targetEl.disabled
+          ? targetEl.value
+          : state.profileDraft?.targetWeightKg;
+    state.profileDraft = normalizeSportProfile({
+      ...state.profileDraft,
+      age: $("#profileAge")?.value,
+      heightCm: $("#profileHeight")?.value,
+      weightKg: weightRaw,
+      targetWeightKg: targetRaw,
+      bodyGoal: goal,
+    });
+    syncSaveEnabled();
+  };
+  root.querySelectorAll("[data-sex]").forEach((btn) => {
+    btn.onclick = () => {
+      if (btn.disabled || (requireConnected && !silpoAccountConnected())) return;
+      syncDraft();
+      state.profileDraft.sex = btn.dataset.sex;
+      render();
+    };
+  });
+  root.querySelectorAll("[data-body-goal]").forEach((btn) => {
+    btn.onclick = () => {
+      if (btn.disabled || (requireConnected && !silpoAccountConnected())) return;
+      syncDraft();
+      const nextGoal = btn.dataset.bodyGoal;
+      state.profileDraft.bodyGoal = nextGoal;
+      state.profileDraft.targetWeightKg = defaultTargetWeightKg(state.profileDraft.weightKg, nextGoal);
+      state.profileDraft = normalizeSportProfile(state.profileDraft);
+      render();
+    };
+  });
+  ["profileAge", "profileHeight", "profileWeight", "profileTargetWeight"].forEach((id) => {
+    const el = $(`#${id}`);
+    if (!el) return;
+    el.oninput = syncDraft;
+    el.onchange = () => {
+      syncDraft();
+      if (id === "profileWeight" && state.profileDraft?.bodyGoal === "maintain") {
+        state.profileDraft.targetWeightKg = state.profileDraft.weightKg;
+      }
+      render();
+    };
+  });
+  const saveBtn = $("#saveProfile");
+  if (saveBtn) {
+    syncSaveEnabled();
+    saveBtn.onclick = () => {
+      const btn = $("#saveProfile");
+      if (btn?.dataset.busy === "1" || btn?.disabled) return;
+      if (requireConnected && !silpoAccountConnected()) {
+        toast("Спочатку підключи Сільпо");
+        return;
+      }
+      syncDraft();
+      const next = normalizeSportProfile({
+        ...state.profileDraft,
+        targetWeightKg: resolveTargetWeightKg(state.profileDraft),
+      });
+      if (!sportProfileDraftReady(next)) {
+        toast("Заповніть стать, вік, зріст, вагу і ціль");
+        return;
+      }
+      setConfirmBusy(btn, true, "Зберігаємо…");
+      const saved = saveSportProfile(next);
+      state.profileDraft = null;
+      state._sportProfilePolishOnce = false;
+      state.intentSport.constraints.level = suggestLevelFromProfile(saved);
+      if (!keepProgramId) {
+        const rankedNow = rankProgramsForProfile(programsForHome(state.kb.programs), saved);
+        if (rankedNow[0]) state.intentSport.constraints.programId = rankedNow[0].id;
+      }
+      state.sportTab = "wheel";
+      state.sportProgramPickerOpen = false;
+      toast("Профіль збережено");
+      afterSave(saved);
+    };
+  }
+}
+
+function homeDemoArtOverride() {
+  try {
+    const v = String(new URLSearchParams(location.search).get("demoArt") || "")
+      .trim()
+      .toLowerCase();
+    if (v === "squat" || v === "присідання" || v === "prysid") {
+      return { ...resolveExerciseArt("Присідання 12 × 3", { frame: 1 }), demoLabel: "Присідання", demoDose: "12 × 3 · ~8 хв" };
+    }
+    if (v === "plank" || v === "планка") {
+      return { ...resolveExerciseArt("Планка 20 с × 3", { frame: 1 }), demoLabel: "Планка", demoDose: "20 с × 3 · ~12 хв" };
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+function homeTodayResumeIndex(steps, daySt) {
+  const len = Array.isArray(steps) ? steps.length : 0;
+  if (!len) return 0;
+  if (!daySt?.partial || !daySt.ev) return 0;
+  /* stepsDone ≈ max(idx, started?1:0) — first incomplete ≈ stepsDone - 1 */
+  const done = Math.max(1, Number(daySt.ev.stepsDone) || 1);
+  return Math.min(len - 1, Math.max(0, done - 1));
+}
+
+function homeTodayMovesListHtml(steps, currentIdx) {
+  const list = Array.isArray(steps) ? steps : [];
+  const start = Math.max(0, Math.min(currentIdx, Math.max(0, list.length - 1)));
+  const window = list.slice(start, start + 5);
+  const fades = [1, 0.72, 0.52, 0.36, 0.24];
+  if (!window.length) {
+    return `<h2 class="home-today__move">—</h2>`;
+  }
+  const items = window
+    .map((st, i) => {
+      const name = splitSessionLabel(st.label).name || sessionLabelShortName(st.label || "") || "—";
+      const cls = i === 0 ? "home-today__move is-current" : "home-today__move is-next";
+      const tag = i === 0 ? "h2" : "p";
+      return `<${tag} class="${cls}" style="--fade:${fades[i] ?? 0.2};--i:${i}">${esc(name)}</${tag}>`;
+    })
+    .join("");
+  return `<div class="home-today__moves" aria-label="Вправи на сьогодні">${items}</div>`;
+}
+
+function homeTodayBundleHtml(vm) {
+  const profile = loadSportProfile();
+  const programId = ensureHomeSportProgram();
+  const level = state.intentSport?.constraints?.level || "beginner";
+  const blocks = sessionFor(state.kb, programId, level, { sex: profile.sex });
+  const steps = parseSessionSteps(blocks);
+  const dayIso = currentDayISO();
+  const daySt = sessionStatusForDay(dayIso);
+  const resumeIdx = homeTodayResumeIndex(steps, daySt);
+  const demo = homeDemoArtOverride();
+  const focusStep = steps[resumeIdx] || steps[0] || { label: "—", durationSec: 40 };
+  const focusName = demo?.demoLabel || splitSessionLabel(focusStep.label).name;
+  const complex = homeComplexTotals(steps, profile.weightKg);
+  const sessionMin = complex.minutes;
+  const burn = complex.burn;
+  const statsHtml = homeTodayStatsHtml({ minutes: sessionMin, burn });
+  const art =
+    demo?.url
+      ? demo
+      : resolveExerciseArt(focusStep.label, { frame: 1 }) || resolveHomeTodayExerciseArt(steps);
+  const months = estimateMonthsToWeightGoal(profile, programId, { sessionBurnKcal: burn });
+  const daysTotal = months == null ? null : Math.max(7, Math.round(months * 30));
+  const receipts = state.historyCache?.receipts || [];
+  const model = sportHomePulseModel({
+    receipts,
+    kb: state.kb,
+    intentSport: state.intentSport,
+    monthKey: currentMonthKey(),
+    levelUa: levelUa(),
+  });
+  const doneDays = Math.max(0, Number(model.ritualDays) || 0);
+  const daysLeft = daysTotal != null ? Math.max(0, daysTotal - doneDays) : null;
+  const pct =
+    daysTotal != null && daysTotal > 0
+      ? Math.min(100, Math.round((doneDays / daysTotal) * 100))
+      : Math.min(100, Math.round((doneDays / Math.max(1, loadSportSessionGoal())) * 100));
+  const progressLeft =
+    daysLeft != null ? `лишилось ${daysLeftUa(daysLeft)}` : `≈ ${doneDays}/${loadSportSessionGoal()} занять`;
+  const progressNow =
+    daysTotal != null ? `${doneDays}/${daysTotal} дн.` : `${doneDays}/${loadSportSessionGoal()} занять`;
+  const programThumb = resolveProgramThumb(programId, steps);
+  const orient = art?.slug ? exerciseArtOrient(art.slug) : "square";
+  const artHtml = art
+    ? `<img class="home-today__art-img is-${orient}" src="${esc(art.url)}" alt="${esc(art.name || focusName)}" width="512" height="512" decoding="async" crossorigin="anonymous" data-art-slug="${esc(art.slug || "")}" />`
+    : programThumb
+      ? `<img class="home-today__art-img home-today__art-img--program" src="${esc(programThumb.url)}" alt="" width="512" height="512" decoding="async" />`
+      : `<span class="home-today__art-fallback" aria-hidden="true">${esc((focusName || "?").slice(0, 1))}</span>`;
+  const rationRows = homeTodayDishRowsHtml(vm);
+
+  let sessionBody;
+  if (daySt.done) {
+    const actualSec = Number(daySt.ev?.durationSec) || 0;
+    sessionBody = `
+        <div class="home-today__session home-today__session--done">
+          <div class="home-today__done">
+            <div class="home-today__done-mosaic session-done__mosaic" aria-hidden="true">${sessionDoneMosaicHtml(steps.slice(0, 3))}</div>
+            <div class="home-today__done-copy">
+              ${sessionDoneCopyHtml({ minutes: sessionMin, steps: steps.length, durationSec: actualSec })}
+            </div>
+          </div>
+          <button type="button" class="home-today__again" data-go="day">Ще раз</button>
+        </div>`;
+  } else {
+    const movesHtml = demo?.demoLabel
+      ? `<div class="home-today__moves" aria-label="Вправи на сьогодні"><h2 class="home-today__move is-current" style="--fade:1">${esc(demo.demoLabel)}</h2></div>`
+      : homeTodayMovesListHtml(steps, resumeIdx);
+    sessionBody = `
+        <div class="home-today__session">
+          <div class="home-today__left">
+            <p class="home-today__kicker">Сьогодні</p>
+            ${movesHtml}
+          </div>
+          <div class="home-today__art home-today__art--bleed" aria-hidden="true">${artHtml}</div>
+          ${statsHtml}
+        </div>`;
+  }
+
+  return `
+    <section class="home-today" aria-label="Сесія сьогодні">
+      <article class="home-today__card home-today__card--bundle">
+        ${sessionBody}
+        <div class="home-today__progress" aria-label="Прогрес до цілі">
+          <div class="home-today__progress-row">
+            <span class="home-today__progress-now"><strong class="home-today__progress-label">прогрес</strong> <span class="num">${esc(progressNow)}</span></span>
+            <span class="home-today__progress-left muted">${esc(progressLeft)}</span>
+          </div>
+          <div class="home-today__bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}">
+            <i style="width:${pct}%"></i>
+          </div>
+        </div>
+        <div class="home-today__ration">
+          ${rationRows || `<p class="muted home-today__ration-empty">Страви з’являться після вибору програми.</p>`}
+        </div>
+      </article>
+    </section>`;
+}
+
+/** Prefer denser CDN frames / later steps; thin line-art gets leaf-tint on home. */
+const HOME_TODAY_SPARSE_SLUGS = new Set(["high-knees", "walking", "seated-knee-tuck", "arm-circles"]);
+
+function resolveHomeTodayExerciseArt(steps) {
+  const list = Array.isArray(steps) ? steps : [];
+  let sparse = null;
+  for (const st of list) {
+    for (const frame of [1, 2, 3]) {
+      const hit = resolveExerciseArt(st?.label || "", { frame: /** @type {1|2|3} */ (frame) });
+      if (!hit) continue;
+      if (HOME_TODAY_SPARSE_SLUGS.has(hit.slug)) {
+        if (!sparse) sparse = hit;
+        continue;
+      }
+      return hit;
+    }
+  }
+  if (sparse) return sparse;
+  const picker = resolvePickerThumbArt(list.map((s) => s.label));
+  return picker;
+}
+
+function homeTodayMealItems(vm) {
+  const dayISO = currentDayISO();
+  const mealMap = activeMealMapForDay(dayISO);
+  const lines = Array.isArray(vm?.lines) ? vm.lines : [];
+  const order = ["breakfast", "lunch", "dinner"];
+  /** @type {{ slot: string, title: string, shot: string }[]} */
+  const items = [];
+  for (const slot of order) {
+    const mapTitle = mealMap?.[slot] && typeof mealMap[slot] === "object" ? mealMap[slot].title : mealMap?.[slot];
+    const slotLines = lines.filter((l) => mealSlotOf(l) === slot);
+    const title = String(mapTitle || slotLines[0]?.groupTitle || roleUa(slot)).trim();
+    if (!title && !slotLines.length) continue;
+    const dishArt = resolveDishArt(title);
+    items.push({
+      slot,
+      title: title || roleUa(slot),
+      shot: dishArt?.url || "",
+    });
+  }
+  return items;
+}
+
+/** Collapsed by default: dish photos only. Expanded: full list with titles. */
+function homeTodayDishRowsHtml(vm) {
+  const items = homeTodayMealItems(vm);
+  if (!items.length) return "";
+  const strip = items
+    .map((it) => {
+      const img = thumbHtml(it.shot, it.title, 48);
+      return `<div class="home-ration__thumb${it.shot ? " home-ration__thumb--shot" : ""}" title="${esc(it.title)}">${img}</div>`;
+    })
+    .join("");
+  const rows = items
+    .map((it) => {
+      const img = thumbHtml(it.shot, it.title, 56);
+      return `
+      <div class="home-dish">
+        <div class="home-dish__media${it.shot ? " home-dish__media--shot" : ""}" aria-hidden="${it.shot ? "true" : "false"}">${img}</div>
+        <div class="home-dish__copy">
+          <p class="home-dish__slot">${roleUa(it.slot)}</p>
+          <h3 class="home-dish__title">${esc(it.title)}</h3>
+        </div>
+      </div>`;
+    })
+    .join("");
+  return `
+    <div class="home-ration" data-home-ration>
+      <button type="button" class="home-ration__toggle" data-home-ration-toggle aria-expanded="false">
+        <span class="home-ration__toggle-label">Раціон на сьогодні</span>
+        <span class="home-ration__chev" aria-hidden="true"></span>
+      </button>
+      <div class="home-ration__strip" data-home-ration-strip aria-hidden="false">${strip}</div>
+      <div class="home-ration__list home-dishes__grid" data-home-ration-list hidden>${rows}</div>
+    </div>`;
+}
+
+/** @deprecated prefer homeTodayBundleHtml — kept for any stray callers */
+function homeTodaySessionCardHtml() {
+  return homeTodayBundleHtml(state._dayVmCache?.vm);
+}
+
+function homeTodayDishesHtml(vm) {
+  const ration = homeTodayDishRowsHtml(vm);
+  if (!ration) {
+    return `<section class="home-dishes" aria-label="Раціон на сьогодні"><p class="muted">Страви з’являться після вибору програми.</p></section>`;
+  }
+  return `
+    <section class="home-dishes" aria-label="Раціон на сьогодні">
+      <article class="home-dishes__card">
+        ${ration}
+      </article>
+    </section>`;
+}
+
+function bindHomeAuthReturn() {
+  const authStart = root.querySelector("[data-auth-start]");
+  if (!authStart) return;
+  authStart.addEventListener("click", () => {
+    try {
+      sessionStorage.setItem("silpo.returnHash", location.hash || "#/");
+    } catch {
+      /* ignore */
+    }
+  });
+}
+
+function bindHomeRationCollapse() {
+  const wrap = root.querySelector("[data-home-ration]");
+  if (!wrap) return;
+  const btn = wrap.querySelector("[data-home-ration-toggle]");
+  const strip = wrap.querySelector("[data-home-ration-strip]");
+  const list = wrap.querySelector("[data-home-ration-list]");
+  if (!btn || !strip || !list) return;
+  btn.onclick = () => {
+    const open = btn.getAttribute("aria-expanded") === "true";
+    const next = !open;
+    btn.setAttribute("aria-expanded", next ? "true" : "false");
+    wrap.classList.toggle("is-open", next);
+    strip.hidden = next;
+    strip.setAttribute("aria-hidden", next ? "true" : "false");
+    list.hidden = !next;
+  };
+}
+
+function bindHomeCommonChrome({ hasToken }) {
+  bindHomeAuthReturn();
+  bindHomeRationCollapse();
+  root.querySelectorAll("[data-go]").forEach((b) => {
+    b.onclick = () => go(b.dataset.go);
+  });
+  root.querySelectorAll("[data-pulse-receipt]").forEach((b) => {
+    b.onclick = () => {
+      void enterShopFromPulse(b.dataset.pulseReceipt);
+    };
+  });
+  root.querySelectorAll("[data-pulse-lists]").forEach((b) => {
+    b.onclick = () => {
+      void enterShopFromPulse(null);
+    };
+  });
+  root.querySelectorAll("[data-open-base]").forEach((b) => {
+    b.onclick = () => {
+      const id = b.dataset.openBase;
+      if (id) openBaseDetail(id);
+      else openLists("bases");
+    };
+  });
+  bindHomePulseCard({ quiet: false });
+  if (SHOW_HOME_SPORT_CHART) {
+    runHomeSportCountUp();
+    root.querySelectorAll(".home-pulse--sport [data-go]").forEach((b) => {
+      b.onclick = () => go(b.dataset.go);
+    });
+  }
+  const dbg = $("#dbg");
+  if (dbg) {
+    dbg.onchange = (e) => {
+      state.debug = e.target.checked;
+      render();
+    };
+  }
+  void hasToken;
+}
+
 async function render() {
   if (!state.kb) return;
   const seq = ++state.renderSeq;
   if (state.screen === "home") {
     await ensureHistoryCache();
+    if (seq !== state.renderSeq) return;
     const hasToken = Boolean(state.mcpStatus?.tokenOnServer);
     const staticHost = state.mcpStatus?.mode === "static_host";
-    const sessionChip = hasToken
-      ? `<span class="home-nav__mcp is-on" role="status"><span class="home-nav__mcp-dot" aria-hidden="true"></span>підключено</span>`
-      : staticHost
-        ? `<span class="home-nav__mcp is-off" role="status" title="Живий логін Сільпо — локально: node server.mjs">демо</span>`
-        : `<a class="home-nav__mcp is-off" href="/auth/start" data-auth-start>Увійти</a>`;
-    paint(
-      `
-      <section class="home-hero home-hero--need" aria-label="СільпоSE">
+    const phase = homeGatePhase();
+    const connectedUi = silpoAccountConnected();
+    const sessionChip = homeSilpoChipHtml({
+      hasToken: connectedUi && hasToken,
+      staticHost: connectedUi && staticHost,
+      connectCta: "Підключитися",
+    });
+
+    if (phase === "onboard") {
+      const connectedUi = silpoAccountConnected();
+      const sub = homeOnboardSubstep();
+      const savedProfile = loadSportProfile();
+      const connectHtml = homeConnectStepHtml({
+        hasToken: connectedUi && hasToken,
+        staticHost: connectedUi && staticHost,
+      });
+
+      if (sub === "program") {
+        ensureHomeSportProgram();
+        const picker = sportProgramPickerModel(savedProfile);
+        paint(
+          `
+      <section class="home-hero home-hero--onboard home-hero--onboard-program" aria-label="Старт СільпоSE · програма">
         <div class="home-hero__wash" aria-hidden="true"></div>
         <header class="home-nav">
           <div class="home-nav__brand-block">
             ${brandMarkHtml({ product: "sportExpress", size: "hero", tag: "span", className: "home-nav__brand" })}
-            <span class="home-nav__whisper">два ритуали · один ритм</span>
+            <span class="home-nav__whisper">крок 3 · обрати програму</span>
+          </div>
+          ${sessionChip}
+        </header>
+        ${connectHtml}
+        ${homeProfileStepPlateHtml(savedProfile)}
+        <section class="sport-pick sport-pick--collapsed sport-pick--picker-forward sport-pick--onboard" aria-label="Обрати програму">
+          ${sportProgramPickerBlockHtml(picker)}
+          <div class="dock dock--sport">
+            <button type="button" class="primary" id="confirmProgram">Далі · на головну →</button>
+          </div>
+        </section>
+        <details class="jury home-jury">
+          <summary>для журі · ds200</summary>
+          <p class="muted">Крок 3 — програма вдома. «Змінити» на плашці кроку 2 повертає до профілю.</p>
+          <label class="muted"><input type="checkbox" id="dbg" ${state.debug ? "checked" : ""}/> показати debug</label>
+        </details>
+      </section>`,
+          () => {
+            bindHomeCommonChrome({ hasToken });
+            bindSportProfileHeroBand();
+            bindSportProgramPickerChrome();
+            const confirmBtn = $("#confirmProgram");
+            if (confirmBtn) {
+              confirmBtn.onclick = () => {
+                const id = state.intentSport?.constraints?.programId || picker.current?.id || "";
+                if (!id) {
+                  toast("Обери програму");
+                  return;
+                }
+                if (confirmBtn.dataset.busy === "1") return;
+                setConfirmBusy(confirmBtn, true, "Зберігаємо…");
+                state.intentSport.constraints.programId = id;
+                confirmSportProgramChoice(id);
+                toast("Програму обрано");
+                render();
+              };
+            }
+          },
+        );
+        return;
+      }
+
+      const draft = normalizeSportProfile(state.profileDraft || savedProfile);
+      state.profileDraft = draft;
+      const formLocked = !connectedUi;
+      const draftGap = sportProfileDraftGap(draft);
+      const canSave = connectedUi && !draftGap;
+      const saveLabel = formLocked
+        ? "Підключи Сільпо, щоб продовжити"
+        : canSave
+          ? "Далі · програма →"
+          : draftGap || "Заповніть профіль";
+      const whisper = formLocked ? "підключи Сільпо · далі профіль" : "крок 2 · хто займається";
+      paint(
+        `
+      <section class="home-hero home-hero--onboard" aria-label="Старт СільпоSE">
+        <div class="home-hero__wash" aria-hidden="true"></div>
+        <header class="home-nav">
+          <div class="home-nav__brand-block">
+            ${brandMarkHtml({ product: "sportExpress", size: "hero", tag: "span", className: "home-nav__brand" })}
+            <span class="home-nav__whisper">${whisper}</span>
+          </div>
+          ${sessionChip}
+        </header>
+        ${homeOnboardHeroHtml()}
+        ${connectHtml}
+        <h1 class="day-flow__title sport-pick__hero onboard-profile__title">Хто займається?</h1>
+        <p class="day-flow__lede muted">${
+          formLocked
+            ? "Після підключення до Сільпо підберемо навантаження й орієнтир калорій."
+            : "Підберемо навантаження й орієнтир калорій. Далі — вибір програми."
+        }</p>
+        ${sportProfileFormFieldsHtml(draft, { locked: formLocked })}
+        <div class="dock dock--sport">
+          <button type="button" class="primary" id="saveProfile" data-ready-label="Далі · програма →"${canSave ? "" : " disabled aria-disabled=\"true\""} title="${esc(saveLabel)}">${esc(saveLabel)}</button>
+        </div>
+        <details class="jury home-jury">
+          <summary>для журі · ds200</summary>
+          <p class="muted">Підключення — офіційний вхід Сільпо. Форма активна лише після підключення; далі — крок 3 · програма.</p>
+          <label class="muted"><input type="checkbox" id="dbg" ${state.debug ? "checked" : ""}/> показати debug</label>
+        </details>
+      </section>`,
+        () => {
+          bindHomeCommonChrome({ hasToken });
+          if (!formLocked) {
+            bindSportProfileForm({
+              requireConnected: true,
+              afterSave: () => {
+                render();
+              },
+            });
+          } else {
+            bindHomeAuthReturn();
+          }
+        },
+      );
+      return;
+    }
+
+    /* ready */
+    ensureHomeSportProgram();
+    state.dayISO = dayKeyKyiv(new Date());
+    let todayBundle = homeTodayBundleHtml(state._dayVmCache?.vm);
+    const partnerSnap = loadActiveContentSourceId();
+    try {
+      const resolveExtra = sportDayResolveExtra();
+      const fp = dayVmFingerprint();
+      let vm = state._dayVmCache?.fp === fp ? state._dayVmCache.vm : null;
+      if (!vm) {
+        vm = await resolveVm(state.intentSport, resolveExtra);
+        if (seq !== state.renderSeq) return;
+        if (partnerSnapDrift(partnerSnap, loadActiveContentSourceId)) {
+          invalidateDayVmCache();
+          void render();
+          return;
+        }
+        state._dayVmCache = { fp, vm };
+      }
+      todayBundle = homeTodayBundleHtml(vm);
+    } catch {
+      todayBundle = homeTodayBundleHtml(null);
+    }
+
+    paint(
+      `
+      <section class="home-hero home-hero--need home-hero--ready" aria-label="СільпоSE">
+        <div class="home-hero__wash" aria-hidden="true"></div>
+        <header class="home-nav">
+          <div class="home-nav__brand-block">
+            ${brandMarkHtml({ product: "sportExpress", size: "hero", tag: "span", className: "home-nav__brand" })}
+            <span class="home-nav__whisper">сесія сьогодні · страви з полиці</span>
           </div>
           ${sessionChip}
         </header>
         ${sourceBadge()}
+        ${homeReadyIdentityPlateHtml(loadSportProfile(), currentSportProgramTitle())}
         <div class="home-rituals home-rituals--sport" role="list">
-          <button type="button" class="home-ritual" data-go="sport" role="listitem">
+          <button type="button" class="home-ritual" data-go="${hasChosenSportProgram() ? "day" : "sport"}" role="listitem">
             <span class="home-ritual__copy">
               <strong class="home-ritual__title">${brandMarkHtml({ product: "sport", size: "card" })}</strong>
               <span class="home-ritual__desc">Сесія сьогодні · страви з полиці</span>
@@ -2661,7 +3652,8 @@ async function render() {
             </span>
           </button>
         </div>
-        ${homeSportPulseHtml()}
+        ${todayBundle}
+        ${SHOW_HOME_SPORT_CHART ? homeSportPulseHtml() : "<!-- homeSportPulseHtml chart parked: SHOW_HOME_SPORT_CHART=false -->"}
         <div class="home-rituals" role="list">
           <button type="button" class="home-ritual" data-go="shop" role="listitem">
             <span class="home-ritual__copy">
@@ -2689,48 +3681,8 @@ async function render() {
       </section>
     `,
       () => {
-        const authStart = root.querySelector("[data-auth-start]");
-        if (authStart) {
-          authStart.addEventListener("click", () => {
-            try {
-              sessionStorage.setItem("silpo.returnHash", location.hash || "#/");
-            } catch {
-              /* ignore */
-            }
-          });
-        }
-        root.querySelectorAll("[data-go]").forEach((b) => {
-          b.onclick = () => go(b.dataset.go);
-        });
-        root.querySelectorAll("[data-pulse-receipt]").forEach((b) => {
-          b.onclick = () => {
-            void enterShopFromPulse(b.dataset.pulseReceipt);
-          };
-        });
-        root.querySelectorAll("[data-pulse-lists]").forEach((b) => {
-          b.onclick = () => {
-            void enterShopFromPulse(null);
-          };
-        });
-        root.querySelectorAll("[data-open-base]").forEach((b) => {
-          b.onclick = () => {
-            const id = b.dataset.openBase;
-            if (id) openBaseDetail(id);
-            else openLists("bases");
-          };
-        });
-        bindHomePulseCard({ quiet: false });
-        runHomeSportCountUp();
-        root.querySelectorAll(".home-pulse--sport [data-go]").forEach((b) => {
-          b.onclick = () => go(b.dataset.go);
-        });
-        const dbg = $("#dbg");
-        if (dbg) {
-          dbg.onchange = (e) => {
-            state.debug = e.target.checked;
-            render();
-          };
-        }
+        bindHomeCommonChrome({ hasToken });
+        bindSportProfileHeroBand({ buttonId: "editHomeProfile" });
       },
     );
     return;
@@ -5770,6 +6722,395 @@ async function addAllDayMealsToExpress(meals, programId) {
   state.handoffMetrics = bumpHandoffMetric(state.handoffMetrics, "bulk_add", n);
 }
 
+/** Soft-add deduped week staples into Express checklist (no cart write). */
+async function addWeekRationToExpress(programId, opts = {}) {
+  const { id: partnerId, pack } = resolveActiveContentSource();
+  const kbMerged = mergeKbWithContentSource(state.kb, pack);
+  const todayIso = dayKeyKyiv(new Date());
+  const weekISOs = weekDayISOs(todayIso);
+  const { queries, uniqueStaples } = buildWeekRationSoftQueries({
+    kb: kbMerged,
+    programId,
+    level: state.intentSport?.constraints?.level || "beginner",
+    anchorISO: todayIso,
+    prefs: loadSportSurvey(),
+    profile: loadSportProfile(),
+    partnerId,
+    contentPack: pack,
+    includeISOs: weekISOs.filter((iso) => state.weekDayIncluded?.[iso] !== false),
+  });
+  if (!queries.length) {
+    toast("Немає позицій для тижня");
+    return 0;
+  }
+  let n = 0;
+  for (const q of queries) {
+    const staple = String(q.staple || q.q || "").trim();
+    if (!staple) continue;
+    const already = (state.extraQueries || []).some(
+      (x) => String(x.staple || x.q || "").trim().toLowerCase() === staple.toLowerCase(),
+    );
+    if (already) continue;
+    await addExtraProduct(
+      { name: staple, staple },
+      {
+        stayOnDay: true,
+        quiet: true,
+        sportRation: {
+          programId,
+          role: q.role || staple,
+          staple,
+          dayISO: q.dayISO,
+          from: "sport_week",
+          pantryCheck: Boolean(q.pantry || q.pantryCheck),
+        },
+      },
+    );
+    n += 1;
+  }
+  if (!opts.quiet) {
+    toast(n ? `Тиждень · ${n} у Express (унікальних ≈ ${uniqueStaples}) · ще не куплено` : "Усе з тижня вже в Express");
+  }
+  if (n) state.handoffMetrics = bumpHandoffMetric(state.handoffMetrics, "bulk_add", n);
+  return n;
+}
+
+function seedWeekBudgetOnShop() {
+  state.intentShop.horizon = "week";
+  state.intentShop.constraints.budgetUah = clampWeekBudgetUah(state.intentShop.constraints.budgetUah);
+  state.shopDirty = true;
+  state.confirmed = false;
+}
+
+async function openWeekRationInExpress(programId) {
+  destroySessionCtl(programId);
+  await addWeekRationToExpress(programId);
+  seedWeekBudgetOnShop();
+  enterShopFromSport(programId);
+}
+
+async function confirmWeekRationToSilpoCart(programId) {
+  const bud = clampWeekBudgetUah(state.intentShop?.constraints?.budgetUah);
+  const ok = window.confirm(
+    `Додати тижневий раціон у живий кошик Сільпо?\n\nСтеля ≈ ${bud} ₴ · тиждень.\nЦе той самий запис, що «Погодити». Оплату оформлюєте на silpo.ua.`,
+  );
+  if (!ok) return;
+  destroySessionCtl(programId);
+  await addWeekRationToExpress(programId, { quiet: true });
+  seedWeekBudgetOnShop();
+  state._pushCartAfterShopResolve = true;
+  enterShopFromSport(programId);
+}
+
+async function maybeAutoPushCartAfterShopResolve(vm) {
+  if (!state._pushCartAfterShopResolve) return;
+  state._pushCartAfterShopResolve = false;
+  if (!vm?.lines?.length) {
+    toast("Список порожній — спочатку додайте раціон");
+    return;
+  }
+  for (const line of vm.lines) {
+    if (line.status === "missing") continue;
+    state.accepted[line.role] = true;
+  }
+  await pushShopCartToSilpo();
+}
+
+/** Cache open-day meals for week accordion collapsed thumbs/sum/kcal. */
+function rememberWeekDaySummary(dayISO, meals, kcalOverride, opts = {}) {
+  if (!dayISO || !Array.isArray(meals)) return;
+  let sum = 0;
+  for (const m of meals) {
+    const price = Number(m.price);
+    if (Number.isFinite(price)) sum += price;
+  }
+  const seed = meals.map((m) => ({
+    image: m.image || "",
+    name: m.name || m.wanted || "",
+    wanted: String(m.wanted || m.staple || "").trim(),
+  }));
+  const demote = opts.demoteWanted instanceof Set ? opts.demoteWanted : new Set(opts.demoteWanted || []);
+  const thumbs = pickCollapsedWeekThumbs(seed, { demoteWanted: demote, limit: 4 });
+  const kcal =
+    kcalOverride != null
+      ? Number(kcalOverride)
+      : estimateDailyKcalFromProfile(loadSportProfile());
+  const prev = state.weekDayCache?.[dayISO];
+  state.weekDayCache = {
+    ...(state.weekDayCache || {}),
+    [dayISO]: {
+      sum,
+      thumbs,
+      seed,
+      kcal: Number.isFinite(kcal) && kcal > 0 ? Math.round(kcal) : 0,
+      live: opts.live === true ? true : Boolean(prev?.live && opts.live !== false),
+    },
+  };
+}
+
+/** After all week days resolved — demote staples already shown as thumbs earlier in the strip. */
+function rebalanceWeekCollapsedThumbs(weekISOs) {
+  if (!Array.isArray(weekISOs) || !weekISOs.length) return;
+  const seen = new Set();
+  for (const iso of weekISOs) {
+    const hit = state.weekDayCache?.[iso];
+    if (!hit?.seed?.length) continue;
+    const thumbs = pickCollapsedWeekThumbs(hit.seed, { demoteWanted: seen, limit: 4 });
+    hit.thumbs = thumbs;
+    for (const t of thumbs) {
+      const w = String(t.wanted || "")
+        .trim()
+        .toLowerCase();
+      if (w) seen.add(w);
+    }
+    patchWeekRowCollapsedChrome(iso);
+  }
+}
+
+function weekThumbsHaveImages(thumbs) {
+  return Array.isArray(thumbs) && thumbs.some((t) => String(t?.image || "").trim());
+}
+
+function patchWeekRowCollapsedChrome(iso) {
+  if (!iso || state.sportRationScope !== "week") return;
+  const row =
+    root.querySelector(`[data-week-row="${CSS.escape(iso)}"]`) ||
+    root.querySelector(`[data-week-row="${iso}"]`);
+  if (!row) return;
+  const { dishesHtml, sumHtml } = weekDayCollapsedBits(iso);
+  const dishes = row.querySelector(".day-week__dishes-wrap");
+  const sum = row.querySelector(".day-week__sum");
+  if (dishes) dishes.innerHTML = dishesHtml;
+  if (sum) sum.innerHTML = sumHtml;
+}
+
+/**
+ * Sync local resolve for each forward week day (₴ + kcal). Thumbs may stay letter
+ * until hydrateWeekDayThumbs pulls MCP photos via /api/resolve.
+ */
+function warmWeekDaySummaries(weekISOs) {
+  if (!Array.isArray(weekISOs) || !weekISOs.length || !state.kb || !state.shelf) return;
+  const prefs = loadSportSurvey();
+  const kcal = estimateDailyKcalFromProfile(loadSportProfile());
+  for (const iso of weekISOs) {
+    const hit = state.weekDayCache?.[iso];
+    if (hit && hit.sum > 0 && hit.kcal > 0 && Array.isArray(hit.seed) && hit.seed.length) continue;
+    try {
+      const { resolveExtra } = resolveSportDayExtra({
+        kb: state.kb,
+        intentSport: state.intentSport,
+        confirmed: false,
+        dayISO: iso,
+        prefs,
+      });
+      const vm = localShopVm(state.intentSport, resolveExtra);
+      rememberWeekDaySummary(iso, vm.lines || [], kcal, { live: false });
+    } catch {
+      state.weekDayCache = {
+        ...(state.weekDayCache || {}),
+        [iso]: {
+          sum: hit?.sum || 0,
+          thumbs: hit?.thumbs || [],
+          seed: hit?.seed || [],
+          kcal: Number.isFinite(kcal) ? Math.round(kcal) : 0,
+          live: false,
+        },
+      };
+    }
+  }
+  rebalanceWeekCollapsedThumbs(weekISOs);
+}
+
+/**
+ * Fill collapsed week thumbs with live /api/resolve product images (same source as open day).
+ * Patches DOM in place — does not remount day screen or touch _dayVmCache / open-day plan.
+ */
+async function hydrateWeekDayThumbs(weekISOs) {
+  if (!Array.isArray(weekISOs) || !weekISOs.length || !state.kb) return;
+  const prefs = loadSportSurvey();
+  const kcal = estimateDailyKcalFromProfile(loadSportProfile());
+  const token = `thumbs:${weekISOs.join(",")}:${Date.now()}`;
+  state._weekThumbHydrate = token;
+
+  await Promise.allSettled(
+    weekISOs.map(async (iso) => {
+      if (state.weekDayCache?.[iso]?.live && weekThumbsHaveImages(state.weekDayCache[iso].thumbs)) {
+        return;
+      }
+      try {
+        const { resolveExtra } = resolveSportDayExtra({
+          kb: state.kb,
+          intentSport: state.intentSport,
+          confirmed: false,
+          dayISO: iso,
+          prefs,
+        });
+        let vm;
+        let live = true;
+        try {
+          vm = await resolveVm(state.intentSport, resolveExtra);
+        } catch {
+          vm = localShopVm(state.intentSport, resolveExtra);
+          live = false;
+        }
+        if (state._weekThumbHydrate !== token || state.sportRationScope !== "week") return;
+        rememberWeekDaySummary(iso, vm.lines || [], kcal, { live });
+        patchWeekRowCollapsedChrome(iso);
+      } catch {
+        /* keep letter tiles */
+      }
+    }),
+  );
+  if (state._weekThumbHydrate === token && state.sportRationScope === "week") {
+    rebalanceWeekCollapsedThumbs(weekISOs);
+  }
+}
+
+/** Collapsed week mid-column: dish titles (not ingredient thumbs). */
+function weekDayDishTitlesHtml(iso) {
+  const map = activeMealMapForDay(iso);
+  const lines = ["breakfast", "lunch", "dinner"]
+    .map((slot) => {
+      const raw = map?.[slot];
+      if (raw == null) return "";
+      const title =
+        typeof raw === "object" && !Array.isArray(raw)
+          ? String(raw.title || "").trim()
+          : String(raw).trim();
+      if (!title) return "";
+      return `<span class="day-week__dish"><span class="day-week__dish-slot">${esc(roleUa(slot))}:</span> <span class="day-week__dish-title">${esc(title)}</span></span>`;
+    })
+    .filter(Boolean);
+  if (!lines.length) {
+    return `<span class="day-week__dishes day-week__dishes--empty muted">страви · ··</span>`;
+  }
+  return `<span class="day-week__dishes">${lines.join("")}</span>`;
+}
+
+/** Collapsed accordion summary: dish titles + ≈ ₴ · ккал. */
+function weekDayCollapsedBits(iso) {
+  const cached = state.weekDayCache?.[iso];
+  const kcalFallback = estimateDailyKcalFromProfile(loadSportProfile());
+  const dishesHtml = weekDayDishTitlesHtml(iso);
+  const sumStack = (sum, kcal) => {
+    const sumPart = sum > 0 ? `≈ ${money(sum)}` : "≈ —";
+    const kcalN = kcal > 0 ? Math.round(kcal) : 0;
+    const kcalPart = kcalN > 0 ? `≈ ${formatIntUa(kcalN)} ккал` : "";
+    return `<span class="day-week__sum-uah">${esc(sumPart)}</span>${
+      kcalPart ? `<span class="day-week__sum-kcal">${esc(kcalPart)}</span>` : ""
+    }`;
+  };
+  if (cached && (cached.sum > 0 || cached.kcal > 0)) {
+    return { dishesHtml, sumHtml: sumStack(cached.sum || 0, cached.kcal || kcalFallback) };
+  }
+  return {
+    dishesHtml,
+    sumHtml: `<span class="day-week__sum-uah">≈ ··</span>${
+      kcalFallback > 0
+        ? `<span class="day-week__sum-kcal">${esc(`≈ ${formatIntUa(kcalFallback)} ккал`)}</span>`
+        : ""
+    }`,
+  };
+}
+
+function ensureWeekDayIncluded(weekISOs) {
+  if (!state.weekDayIncluded) state.weekDayIncluded = {};
+  for (const iso of weekISOs) {
+    if (state.weekDayIncluded[iso] == null) state.weekDayIncluded[iso] = true;
+  }
+}
+
+/**
+ * Expand another week day in-place (no full day remount / wait shell).
+ * Resolves plates for that ISO into the accordion body only.
+ */
+async function openWeekAccordionDay(iso) {
+  if (!iso || iso === currentDayISO()) return;
+  const acc = root.querySelector(".day-week__acc");
+  if (!acc || state.sportRationScope !== "week") {
+    state.dayISO = iso;
+    state.navLock = true;
+    invalidateDayVmCache({ keepWeekSummaries: true });
+    writeHash();
+    void render();
+    return;
+  }
+
+  const hopToken = `${iso}:${Date.now()}`;
+  state._weekAccHop = hopToken;
+  state.dayISO = iso;
+  state.navLock = true;
+  writeHash();
+
+  acc.querySelectorAll(".day-week__row").forEach((row) => {
+    const on = row.dataset.weekRow === iso;
+    row.classList.toggle("is-open", on);
+    const btn = row.querySelector("[data-week-day]");
+    const chev = row.querySelector(".day-week__chev");
+    if (btn) btn.setAttribute("aria-expanded", on ? "true" : "false");
+    if (chev) chev.textContent = on ? "▾" : "▸";
+    if (!on) row.querySelector(".day-week__row-body")?.remove();
+  });
+
+  const openRow = acc.querySelector(`[data-week-row="${CSS.escape(iso)}"]`) || acc.querySelector(`[data-week-row="${iso}"]`);
+  if (!openRow) return;
+
+  let body = openRow.querySelector(".day-week__row-body");
+  if (!body) {
+    body = document.createElement("div");
+    body.className = "day-week__row-body";
+    openRow.appendChild(body);
+  }
+  root.querySelectorAll("#dayPlatesList").forEach((el) => {
+    if (el !== body) el.removeAttribute("id");
+  });
+  body.id = "dayPlatesList";
+  body.innerHTML = `<p class="muted day-week__loading">Збираємо день…</p>`;
+
+  const todayIso = dayKeyKyiv(new Date());
+  const isViewToday = iso === todayIso;
+  const sessionToggle = $("#session-toggle");
+  const sessionSkip = $("#session-skip");
+  if (sessionToggle) sessionToggle.disabled = !isViewToday;
+  if (sessionSkip) sessionSkip.disabled = !isViewToday;
+
+  const { plan, pack, resolveExtra } = resolveSportDayExtra({
+    kb: state.kb,
+    intentSport: state.intentSport,
+    confirmed: state.confirmed,
+    dayISO: iso,
+  });
+  state._sportRationPlan = plan;
+  state._contentSourcePack = pack;
+
+  let vm;
+  let live = true;
+  try {
+    vm = await resolveVm(state.intentSport, resolveExtra);
+  } catch {
+    vm = localShopVm(state.intentSport, resolveExtra);
+    live = false;
+  }
+  if (state._weekAccHop !== hopToken || currentDayISO() !== iso) return;
+
+  state._dayMeals = vm.lines || [];
+  state._dayBranchLabel = vm.branchLabel;
+  state._dayVmCache = { fp: dayVmFingerprint(), vm };
+  rememberWeekDaySummary(iso, state._dayMeals, undefined, { live });
+
+  const plates = dayMealsHtml(state._dayMeals, { dayISO: iso });
+  body.innerHTML = plates.html;
+
+  const bits = weekDayCollapsedBits(iso);
+  const dishes = openRow.querySelector(".day-week__dishes-wrap");
+  const sum = openRow.querySelector(".day-week__sum");
+  if (dishes) dishes.innerHTML = bits.dishesHtml;
+  if (sum) sum.innerHTML = bits.sumHtml;
+
+  bindDayPlatesMealActions(state._dayMeals, state.intentSport?.constraints?.programId || "");
+  patchDayLoopGapChip(iso);
+}
+
 function dayPlatesFilterBtnHtml(prefs) {
   const count = surveyTasteFilterCount(prefs);
   const aria = count > 0 ? `Фільтри смаків, обрано ${count}` : "Фільтри смаків";
@@ -7138,6 +8479,16 @@ async function renderSport(seq) {
 
   if (state.screen === "day") {
     stampSportProfileOnIntent();
+    const todayIsoEarly = dayKeyKyiv(new Date());
+    if (state.sportRationScope === "week") {
+      const forward = weekDayISOs(todayIsoEarly);
+      if (forward.length && !forward.includes(currentDayISO())) {
+        state.dayISO = todayIsoEarly;
+        state.navLock = true;
+        invalidateDayVmCache();
+        writeHash();
+      }
+    }
     const partnerSnap = loadActiveContentSourceId();
     const resolveExtra = sportDayResolveExtra();
     const fp = dayVmFingerprint();
@@ -7174,6 +8525,7 @@ async function renderSport(seq) {
     const meals = vm.lines;
     state._dayMeals = meals;
     state._dayBranchLabel = vm.branchLabel;
+    rememberWeekDaySummary(currentDayISO(), meals, undefined, { live: true });
     const plates = dayMealsHtml(meals);
     const programId = state.intentSport?.constraints?.programId || "";
     if (state._sessionCtl) {
@@ -7202,10 +8554,9 @@ async function renderSport(seq) {
         : isViewToday
           ? ""
           : "без сесії в цей день";
-    const sessionMin = Math.max(
-      1,
-      Math.round(sessionSteps.reduce((s, st) => s + (Number(st.durationSec) || 0), 0) / 60),
-    );
+    const sessionTotals = homeComplexTotals(sessionSteps, loadSportProfile().weightKg);
+    const sessionMin = sessionTotals.minutes;
+    const sessionBurn = sessionTotals.burn;
     const nextBoot = sessionDoneToday
       ? ""
       : sessionSteps[1]
@@ -7233,6 +8584,56 @@ async function renderSport(seq) {
         : `<button type="button" class="ghost ghost--sheet day-plates__add-all" id="addAllPlates">${
             addableN === 1 ? "Додати в Express" : `Додати всі (${addableN}) в Express`
           }</button>`;
+    const rationScope = state.sportRationScope === "week" ? "week" : "day";
+    const weekISOs = weekDayISOs(todayIso);
+    if (rationScope === "week") {
+      warmWeekDaySummaries(weekISOs);
+    }
+    ensureWeekDayIncluded(weekISOs);
+    const weekBud = clampWeekBudgetUah(state.intentShop?.constraints?.budgetUah);
+    const weekAccRows = weekISOs
+      .map((iso) => {
+        const chip = weekDayChipLabel(iso, viewDayIso);
+        const open = iso === viewDayIso;
+        const included = state.weekDayIncluded?.[iso] !== false;
+        const { dishesHtml, sumHtml } = weekDayCollapsedBits(iso);
+        const body = open
+          ? `<div class="day-week__row-body" id="dayPlatesList">${plates.html}</div>`
+          : "";
+        return `<div class="day-week__row${open ? " is-open" : ""}${included ? "" : " is-off"}" data-week-row="${esc(iso)}">
+        <div class="day-week__row-head">
+          <label class="day-week__check">
+            <input type="checkbox" data-week-include="${esc(iso)}" ${included ? "checked" : ""} aria-label="Включити ${esc(chip.ua)} ${esc(chip.num)} у тиждень" />
+          </label>
+          <button type="button" class="day-week__toggle" data-week-day="${esc(iso)}" aria-expanded="${open ? "true" : "false"}">
+            <span class="day-week__toggle-day"><span class="day-week__chip-ua">${esc(chip.ua)}</span><span class="day-week__chip-num">${esc(chip.num)}</span></span>
+            <span class="day-week__dishes-wrap">${dishesHtml}</span>
+            <span class="day-week__sum num">${sumHtml}</span>
+            <span class="day-week__chev" aria-hidden="true">${open ? "▾" : "▸"}</span>
+          </button>
+        </div>
+        ${body}
+      </div>`;
+      })
+      .join("");
+    const weekBottomActions =
+      rationScope === "week"
+        ? `<div class="day-week__actions day-week__actions--dock">
+          <button type="button" class="ghost ghost--sheet" id="weekAddExpress">Додати все в СільпоExpress</button>
+          <button type="button" class="primary" id="weekAddCart">Додати одразу в кошик Сільпо</button>
+          <p class="muted day-week__hint">${esc(weekDayPlateUahHintCopy())}</p>
+          <p class="muted day-week__hint">У Express можна правити qty і прибрати зайве під стелю. Кошик — лише після підтвердження.</p>
+        </div>`
+        : "";
+    const scopeBits = [
+      { id: "day", label: "сьогодні" },
+      { id: "week", label: "тиждень" },
+    ]
+      .map(
+        (s) =>
+          `<button type="button" class="day-plates__scope-chip${rationScope === s.id ? " is-on" : ""}" data-ration-scope="${s.id}" aria-pressed="${rationScope === s.id ? "true" : "false"}">${esc(s.label)}</button>`,
+      )
+      .join("");
     const surveyPrefs = loadSportSurvey();
     const plateMode = plateModeFromCookMode(surveyPrefs.cookMode);
     const plateModeBits = [
@@ -7287,11 +8688,11 @@ async function renderSport(seq) {
           ${brandMarkHtml({ product: "sport", size: "chrome", tag: "h1", className: "sport-title sport-chrome__brand" })}
         </div>
       </header>
-      ${sportProfileHeroBandHtml(savedProfile)}
+      ${sportProfileHeroBandHtml(savedProfile, { programTitle: currentSportProgramTitle() })}
       ${sourceBadge()}
       <section class="day-sheet session-player session-player--guide session-player--hero${sessionDoneToday ? " is-complete" : ""}" aria-label="Сесія">
         <div class="session-player__top session-player__top--hero">
-          <span class="session-player__meta-line muted">Сесія · ≈ ${sessionMin} хв · ${sessionSteps.length} кр.</span>
+          <span class="session-player__meta-line muted">Сесія · ≈ ${sessionMin} хв · ≈ ${sessionBurn} ккал · ${sessionSteps.length} кр.</span>
           <button type="button" class="day-flow__program day-flow__program--meta" id="toWheel" aria-label="Змінити програму: ${esc(vm.title)}">
             <span class="day-flow__program-hint">змінити програму</span>
           </button>
@@ -7357,8 +8758,27 @@ async function renderSport(seq) {
       </section>
       ${walkCard}
       <section class="day-sheet day-sheet--plates" aria-label="Спортивний раціон">
-        <strong class="day-sheet__label">Спортивний раціон</strong>
-        <div class="day-plates__prefs" aria-label="Режим раціону">
+        <div class="day-plates__head">
+          <strong class="day-sheet__label">Спортивний раціон</strong>
+          <div class="day-plates__scope" role="group" aria-label="Горизонт раціону">${scopeBits}</div>
+        </div>
+        ${
+          rationScope === "week"
+            ? `<div class="day-week" aria-label="Раціон на тиждень">
+        <label class="day-week__budget">
+          <span class="day-week__budget-label">Стеля на тиждень · ₴</span>
+          <input id="weekBudget" type="number" inputmode="numeric" min="300" max="8000" step="50" value="${weekBud}" aria-label="Стеля бюджету на тиждень, гривні" />
+        </label>
+        <div class="day-plates__prefs day-plates__prefs--week" aria-label="Режим раціону">
+          <div class="day-plates__mode-row">
+            <div class="day-plates__mode" role="radiogroup" aria-label="Готові страви або інгредієнти">${plateModeBits}</div>
+            ${filterBtnHtml}
+          </div>
+        </div>
+        <div class="day-week__acc" role="list" aria-label="Дні тижня">${weekAccRows}</div>
+      </div>
+        <div class="day-plates__actions">${weekBottomActions}</div>`
+            : `<div class="day-plates__prefs" aria-label="Режим раціону">
           <div class="day-plates__mode-row">
             <div class="day-plates__mode" role="radiogroup" aria-label="Готові страви або інгредієнти">${plateModeBits}</div>
             ${filterBtnHtml}
@@ -7368,7 +8788,8 @@ async function renderSport(seq) {
         <div class="day-plates__actions">
           ${addAllCta}
           <button type="button" class="primary day-plates__express${expressOnDay > 0 ? " day-plates__express--has" : ""}" id="toExpress">${esc(expressCta)}</button>
-        </div>
+        </div>`
+        }
       </section>
       ${debugHtml(vm)}
       </section>
@@ -7379,13 +8800,7 @@ async function renderSport(seq) {
           go("home");
         };
         $("#toWheel").onclick = () => {
-          destroySessionCtl(programId);
-          state.screen = "sport";
-          state.sportTab = "wheel";
-          state.sportProgramPickerOpen = false;
-          state.navLock = true;
-          writeHash();
-          render();
+          openSportProfileProgramEdit({ programId });
         };
         $("#editSurvey").onclick = () => {
           destroySessionCtl(programId);
@@ -7396,11 +8811,60 @@ async function renderSport(seq) {
             void applyDayPlateMode(btn.dataset.plateMode);
           };
         });
+        root.querySelectorAll("[data-ration-scope]").forEach((btn) => {
+          btn.onclick = () => {
+            const next = btn.dataset.rationScope === "week" ? "week" : "day";
+            if (state.sportRationScope === next) return;
+            state.sportRationScope = next;
+            render();
+          };
+        });
+        root.querySelectorAll("[data-week-day]").forEach((btn) => {
+          btn.onclick = () => {
+            const iso = btn.dataset.weekDay;
+            if (!iso) return;
+            void openWeekAccordionDay(iso);
+          };
+        });
+        if (rationScope === "week") {
+          void hydrateWeekDayThumbs(weekISOs);
+        }
+        root.querySelectorAll("[data-week-include]").forEach((inp) => {
+          inp.onchange = () => {
+            const iso = inp.dataset.weekInclude;
+            if (!iso) return;
+            state.weekDayIncluded = { ...(state.weekDayIncluded || {}), [iso]: Boolean(inp.checked) };
+            const row = root.querySelector(`[data-week-row="${iso}"]`);
+            row?.classList.toggle("is-off", !inp.checked);
+          };
+        });
+        const weekBudEl = $("#weekBudget");
+        if (weekBudEl) {
+          weekBudEl.onchange = () => {
+            state.intentShop.constraints.budgetUah = clampWeekBudgetUah(weekBudEl.value);
+            weekBudEl.value = String(state.intentShop.constraints.budgetUah);
+          };
+        }
+        const weekAddExpress = $("#weekAddExpress");
+        if (weekAddExpress) {
+          weekAddExpress.onclick = () => {
+            void openWeekRationInExpress(programId);
+          };
+        }
+        const weekAddCart = $("#weekAddCart");
+        if (weekAddCart) {
+          weekAddCart.onclick = () => {
+            void confirmWeekRationToSilpoCart(programId);
+          };
+        }
         /* Partner fixture: ?partner=chef only (not day prefs — «інгредієнти» = cookMode). */
-        $("#toExpress").onclick = () => {
-          destroySessionCtl(programId);
-          enterShopFromSport(programId);
-        };
+        const toExpress = $("#toExpress");
+        if (toExpress) {
+          toExpress.onclick = () => {
+            destroySessionCtl(programId);
+            enterShopFromSport(programId);
+          };
+        }
         bindSportProfileHeroBand({ programId });
         root.querySelectorAll("[data-walk-steps]").forEach((btn) => {
           btn.onclick = () => {
@@ -7443,24 +8907,85 @@ async function renderSport(seq) {
   }
 
   const savedProfile = loadSportProfile();
-  /* Polish: each full page load starts on profile form once; save clears the gate. */
-  if (state._sportProfilePolishOnce == null) state._sportProfilePolishOnce = true;
-  const needProfile =
-    state._sportProfilePolishOnce || !profileIsComplete(savedProfile) || Boolean(state.profileDraft);
-  if (needProfile) {
+  const combinedEdit = Boolean(state._sportCombinedEdit);
+  const needProfileOnly =
+    !combinedEdit &&
+    (state._sportProfilePolishOnce || !profileIsComplete(savedProfile) || Boolean(state.profileDraft));
+
+  if (combinedEdit) {
+    ensureHomeSportProgram();
     const draft = normalizeSportProfile(state.profileDraft || savedProfile);
     state.profileDraft = draft;
-    const sexBits = SEX_OPTIONS.map(
-      (s) =>
-        `<button type="button" class="day-walk__chip sport-profile__chip-opt${draft.sex === s.id ? " is-on" : ""}" data-sex="${s.id}" aria-pressed="${draft.sex === s.id ? "true" : "false"}">${esc(s.label)}</button>`,
-    ).join("");
-    const goalBits = BODY_GOALS.map(
-      (g) =>
-        `<button type="button" class="day-walk__chip sport-profile__chip-opt${draft.bodyGoal === g.id ? " is-on" : ""}" data-body-goal="${g.id}" aria-pressed="${draft.bodyGoal === g.id ? "true" : "false"}">${esc(g.label)}</button>`,
-    ).join("");
-    const kcalHint = profileIsComplete({ ...draft, completedAt: draft.completedAt || "x" })
-      ? estimateDailyKcalFromProfile({ ...draft, completedAt: draft.completedAt || new Date().toISOString() })
-      : null;
+    const picker = sportProgramPickerModel(draft);
+    paint(
+      `
+      <section class="day-flow sport-pick sport-pick--combined-edit sport-pick--picker-forward" aria-label="Змінити профіль і програму">
+        <header class="sport-chrome sport-chrome--inline">
+          <div class="sport-chrome-top">
+            <button type="button" class="back" id="back" aria-label="Назад">←</button>
+            ${brandMarkHtml({ product: "sport", size: "chrome", tag: "p", className: "sport-chrome__brand" })}
+          </div>
+          <p class="day-flow__kicker sport-chrome__kicker">профіль і програма · не медична порада</p>
+        </header>
+        <h1 class="day-flow__title sport-pick__hero">Хто займається?</h1>
+        <p class="day-flow__lede muted">Онови характеристики — збережи. Нижче можна змінити програму.</p>
+        ${sportProfileFormFieldsHtml(draft)}
+        <div class="sport-pick__save-row">
+          <button type="button" class="primary" id="saveProfile">Зберегти профіль</button>
+        </div>
+        ${sportProgramPickerBlockHtml(picker)}
+        <div class="dock dock--sport">
+          <button type="button" class="primary" id="saveProgramEdit">Зберегти програму · на головну →</button>
+        </div>
+      </section>
+    `,
+      () => {
+        $("#back").onclick = () => {
+          state._sportCombinedEdit = false;
+          state.profileDraft = null;
+          state._sportProfilePolishOnce = false;
+          go("home");
+        };
+        bindSportProfileForm({
+          keepProgramId: true,
+          onBack: () => {
+            state._sportCombinedEdit = false;
+            state.profileDraft = null;
+            go("home");
+          },
+          afterSave: (saved) => {
+            state._sportCombinedEdit = true;
+            state.profileDraft = normalizeSportProfile(saved);
+            render();
+          },
+        });
+        bindSportProgramPickerChrome();
+        const saveProg = $("#saveProgramEdit");
+        if (saveProg) {
+          saveProg.onclick = () => {
+            const id = state.intentSport?.constraints?.programId || picker.current?.id || "";
+            if (!id) {
+              toast("Обери програму");
+              return;
+            }
+            if (saveProg.dataset.busy === "1") return;
+            setConfirmBusy(saveProg, true, "Зберігаємо…");
+            state.intentSport.constraints.programId = id;
+            confirmSportProgramChoice(id);
+            state._sportCombinedEdit = false;
+            state.profileDraft = null;
+            toast("Програму збережено");
+            go("home");
+          };
+        }
+      },
+    );
+    return;
+  }
+
+  if (needProfileOnly) {
+    const draft = normalizeSportProfile(state.profileDraft || savedProfile);
+    state.profileDraft = draft;
     paint(
       `
       <section class="day-flow sport-pick sport-pick--profile" aria-label="Профіль СільпоSport">
@@ -7473,152 +8998,35 @@ async function renderSport(seq) {
         </header>
         <h1 class="day-flow__title sport-pick__hero">Хто займається?</h1>
         <p class="day-flow__lede muted">Підберемо навантаження й орієнтир калорій. Далі — програми вдома.</p>
-        <section class="day-sheet sport-profile__card" aria-label="Параметри">
-          <p class="day-sheet__label sport-pick__section-label">Стать</p>
-          <div class="day-walk__presets sport-profile__sex" role="group" aria-label="Стать">${sexBits}</div>
-          <p class="day-sheet__label sport-pick__section-label">Параметри</p>
-          <div class="sport-profile__metrics" role="group" aria-label="Параметри тіла">
-            <label class="sport-profile__metric"><span>Вік · р.</span><input id="profileAge" type="number" inputmode="numeric" min="14" max="90" value="${draft.age ?? ""}" placeholder="—" aria-label="Вік у роках" /></label>
-            <label class="sport-profile__metric"><span>Зріст · см</span><input id="profileHeight" type="number" inputmode="numeric" min="120" max="230" value="${draft.heightCm ?? ""}" placeholder="—" aria-label="Зріст у сантиметрах" /></label>
-            <label class="sport-profile__metric"><span>Вага · кг</span><input id="profileWeight" type="number" inputmode="numeric" min="35" max="200" value="${draft.weightKg ?? ""}" placeholder="—" aria-label="Вага в кілограмах" /></label>
-          </div>
-          <p class="day-sheet__label sport-pick__section-label">Ціль</p>
-          <div class="day-walk__presets sport-profile__goals" role="group" aria-label="Ціль">${goalBits}</div>
-          ${kcalHint ? `<p class="muted sport-profile__kcal">≈ ${kcalHint} ккал/день · орієнтир</p>` : ""}
-        </section>
+        ${sportProfileFormFieldsHtml(draft)}
         <div class="dock dock--sport">
           <button type="button" class="primary" id="saveProfile">Далі · програми для мене →</button>
         </div>
       </section>
     `,
       () => {
-        $("#back").onclick = () => {
-          state.profileDraft = null;
-          state._sportProfilePolishOnce = false;
-          go("home");
-        };
-        const syncDraft = () => {
-          state.profileDraft = normalizeSportProfile({
-            ...state.profileDraft,
-            age: $("#profileAge")?.value,
-            heightCm: $("#profileHeight")?.value,
-            weightKg: $("#profileWeight")?.value,
-          });
-        };
-        root.querySelectorAll("[data-sex]").forEach((btn) => {
-          btn.onclick = () => {
-            syncDraft();
-            state.profileDraft.sex = btn.dataset.sex;
+        bindSportProfileForm({
+          onBack: () => {
+            state.profileDraft = null;
+            state._sportProfilePolishOnce = false;
+            go("home");
+          },
+          afterSave: () => {
             render();
-          };
+          },
         });
-        root.querySelectorAll("[data-body-goal]").forEach((btn) => {
-          btn.onclick = () => {
-            syncDraft();
-            state.profileDraft.bodyGoal = btn.dataset.bodyGoal;
-            render();
-          };
-        });
-        ["profileAge", "profileHeight", "profileWeight"].forEach((id) => {
-          const el = $(`#${id}`);
-          if (!el) return;
-          el.oninput = syncDraft;
-          el.onchange = () => {
-            syncDraft();
-            render();
-          };
-        });
-        $("#saveProfile").onclick = () => {
-          const btn = $("#saveProfile");
-          if (btn?.dataset.busy === "1") return;
-          syncDraft();
-          const next = normalizeSportProfile(state.profileDraft);
-          if (!next.sex || next.age == null || next.heightCm == null || next.weightKg == null || !next.bodyGoal) {
-            toast("Заповніть стать, вік, зріст, вагу і ціль");
-            return;
-          }
-          setConfirmBusy(btn, true, "Зберігаємо…");
-          const saved = saveSportProfile(next);
-          state.profileDraft = null;
-          state._sportProfilePolishOnce = false;
-          state.intentSport.constraints.level = suggestLevelFromProfile(saved);
-          const rankedNow = rankProgramsForProfile(programsForHome(state.kb.programs), saved);
-          if (rankedNow[0]) state.intentSport.constraints.programId = rankedNow[0].id;
-          state.sportTab = "wheel";
-          state.sportProgramPickerOpen = false;
-          toast("Профіль збережено");
-          render();
-        };
       },
     );
     return;
   }
 
-  const current = programs[idx] || programs[0];
-  const suggestedIds = new Set(programs.slice(0, 3).map((p) => p.id));
-  const levelForArt = state.intentSport?.constraints?.level || "beginner";
-  const goalFilter = state.sportProgramGoalFilter || "";
-  const listed = goalFilter ? programs.filter((p) => p.goal === goalFilter) : programs;
-
-  const catOptions = [{ id: "", label: "усі" }, ...Object.entries(TRAINING_GOAL_UA).map(([id, label]) => ({ id, label }))];
-  const catSelectHtml = catOptions
-    .map(
-      (c) =>
-        `<option value="${esc(c.id)}"${goalFilter === c.id ? " selected" : ""}>${esc(c.label)}</option>`,
-    )
-    .join("");
-
-  const programListHtml = listed.length
-    ? listed
-        .map((p) => {
-          const on = p.id === current?.id;
-          const suggested = suggestedIds.has(p.id);
-          const steps = sessionFor(state.kb, p.id, levelForArt, { sex: savedProfile.sex }) || [];
-          const thumbArt = resolveProgramThumb(p.id, steps);
-          const thumb = thumbArt
-            ? `<span class="sport-rec__thumb sport-rec__thumb--photo"><img src="${esc(thumbArt.url)}" alt="" width="64" height="64" loading="lazy" decoding="async" /></span>`
-            : `<span class="sport-rec__thumb sport-rec__thumb--letter" aria-hidden="true">${esc(String(p.title || "?").slice(0, 1))}</span>`;
-          const badges = suggested ? `<span class="sport-rec__badge">для вас</span>` : "";
-          const meta = programPickerMetaLine(p, savedProfile, on);
-          const radio = on
-            ? `<span class="sport-rec__radio sport-rec__radio--on" aria-hidden="true"><span class="sport-rec__radio-check">✓</span></span>`
-            : `<span class="sport-rec__radio" aria-hidden="true"></span>`;
-          return `<button type="button" class="sport-rec${suggested ? " is-suggested" : ""}${on ? " is-on" : ""}" data-program-id="${esc(p.id)}" role="option" aria-selected="${on ? "true" : "false"}">
-        ${thumb}
-        <span class="sport-rec__body">
-          <span class="sport-rec__title-row"><strong class="sport-rec__title">${esc(p.title)}</strong>${badges}</span>
-          <span class="muted sport-rec__meta">${esc(meta)}</span>
-        </span>
-        ${radio}
-      </button>`;
-        })
-        .join("")
-    : `<p class="muted sport-program-picker__empty">Немає програм у цій категорії</p>`;
-
-  function bindSportPickerForward() {
-    const goalFilterEl = $("#goalFilter");
-    if (goalFilterEl) {
-      goalFilterEl.onchange = () => {
-        state.sportProgramGoalFilter = goalFilterEl.value || "";
-        render();
-      };
-    }
-    root.querySelectorAll("[data-program-id]").forEach((btn) => {
-      btn.onclick = () => {
-        state.intentSport.constraints.programId = btn.dataset.programId;
-        render();
-      };
-    });
-    const catalog = root.querySelector(".sport-pick__catalog");
-    if (catalog) {
-      catalog.onwheel = (e) => {
-        if (catalog.scrollHeight <= catalog.clientHeight) return;
-        if (!e.target.closest(".sport-rec")) return;
-        catalog.scrollTop += e.deltaY;
-        e.preventDefault();
-      };
-    }
+  /* Program already chosen on home onboard — skip picker, open day. */
+  if (hasChosenSportProgram()) {
+    enterSportDay();
+    return;
   }
+
+  const picker = sportProgramPickerModel(savedProfile);
 
   paint(
     `
@@ -7629,28 +9037,8 @@ async function renderSport(seq) {
           ${brandMarkHtml({ product: "sport", size: "chrome", tag: "p", className: "sport-chrome__brand" })}
         </div>
       </header>
-      ${sportProfileHeroBandHtml(savedProfile)}
-      <div class="sport-pick__programs">
-        <div class="sport-pick__programs-head">
-          <strong class="sport-pick__programs-title">Обрати програму</strong>
-        </div>
-        <div class="sport-pick__toolbar">
-          <button type="button" class="sport-pick__filter-pill sport-pick__level-pill" id="level" aria-label="Рівень: ${levelUa()}">
-            <span class="sport-pick__filter-pill-label">Рівень</span>
-            <span class="sport-pick__filter-pill-value">${levelUa()} <span class="chev" aria-hidden="true">▾</span></span>
-          </button>
-          <label class="sport-pick__filter-pill sport-pick__category-pill">
-            <span class="sport-pick__filter-pill-label">Категорія</span>
-            <span class="sport-pick__filter-pill-field">
-              <select id="goalFilter" aria-label="Категорія програм">${catSelectHtml}</select>
-              <span class="chev" aria-hidden="true">▾</span>
-            </span>
-          </label>
-        </div>
-        <div class="sport-pick__catalog" id="sport-picker-panel" role="listbox" aria-label="Програми вдома">
-          <div class="sport-rec-list">${programListHtml}</div>
-        </div>
-      </div>
+      ${sportProfileHeroBandHtml(savedProfile, { programTitle: currentSportProgramTitle() })}
+      ${sportProgramPickerBlockHtml(picker)}
       <div class="dock dock--sport">
         <button type="button" class="primary" id="next">Далі · день і полиця →</button>
       </div>
@@ -7659,11 +9047,6 @@ async function renderSport(seq) {
     () => {
       $("#back").onclick = () => go("home");
       bindSportProfileHeroBand();
-      $("#level").onclick = () => {
-        state.intentSport.constraints.level =
-          state.intentSport.constraints.level === "beginner" ? "intermediate" : "beginner";
-        render();
-      };
       $("#next").onclick = () => {
         const btn = $("#next");
         if (btn?.dataset.busy === "1") return;
@@ -7671,7 +9054,7 @@ async function renderSport(seq) {
         state.sportProgramPickerOpen = false;
         enterSportDay();
       };
-      bindSportPickerForward();
+      bindSportProgramPickerChrome();
     },
   );
 }
@@ -8579,7 +9962,8 @@ function paintShop(i, vm, loading, opts = {}) {
     moodUah: progressM.moodUah,
     userWasteUah: progressM.userWasteUah,
     whisperHtml: "",
-    innerFooterHtml: `${orangeClusterHtml}${controlsHtml}`,
+    controlsHtml,
+    innerFooterHtml: orangeClusterHtml,
   });
   const checkoutHeaderHtml = `
     <div class="shop-checkout-header shop-checkout-header--wallet-unified shop-sheet" aria-label="Прогрес і керування списком">
@@ -8703,6 +10087,7 @@ async function renderShop(seq) {
     state.shopDirty = false;
     state.shopResolving = false;
     ensureAcceptedDefaults(vm);
+    await maybeAutoPushCartAfterShopResolve(vm);
   } else if (vm) {
     await histP;
     if (seq !== state.renderSeq) return;
@@ -9648,11 +11033,14 @@ async function addExtraProduct(pick, opts = {}) {
     },
     why: `додано · ${groupTitle}`,
   };
-  if (opts.sportRation) {
+    if (opts.sportRation) {
     extra = withSportDayProvenance(extra, {
       programId: opts.sportRation.programId || state.intentSport?.constraints?.programId || "",
       role: opts.sportRation.role,
       staple: opts.sportRation.staple,
+      dayISO: opts.sportRation.dayISO,
+      from: opts.sportRation.from,
+      pantryCheck: opts.sportRation.pantryCheck || opts.sportRation.pantry,
     });
   }
   state.extraQueries = [...state.extraQueries, extra].map((q) => {
@@ -9660,8 +11048,8 @@ async function addExtraProduct(pick, opts = {}) {
     const g = destinationGroupForAdd(q.q, names);
     const gt = groupMeta(g).title;
     const why =
-      q.from === "sport_day"
-        ? `з програми · ${gt}`
+      q.from === "sport_day" || q.from === "sport_week"
+        ? `з ${q.from === "sport_week" ? "тижня" : "програми"} · ${gt}`
         : `додано · ${gt}`;
     return { ...q, group: g, groupTitle: gt, why };
   });
@@ -10173,6 +11561,20 @@ window.__skuThumbFallback = (img) => {
   if (node) img.replaceWith(node);
 };
 
+/** Program picker photo → letter tile when /content/programs/*.png fails. */
+window.__programThumbFallback = (img) => {
+  if (!img || img.dataset.fell) return;
+  img.dataset.fell = "1";
+  const letter = img.dataset.letter || "?";
+  const span = document.createElement("span");
+  span.className = "sport-rec__thumb sport-rec__thumb--letter";
+  span.setAttribute("aria-hidden", "true");
+  span.textContent = letter;
+  const wrap = img.closest(".sport-rec__thumb");
+  if (wrap) wrap.replaceWith(span);
+  else img.replaceWith(span);
+};
+
 function slotChipKeys(slotCats) {
   const keys = new Set();
   for (const c of slotCats || []) {
@@ -10329,11 +11731,11 @@ function dayMealsHtml(meals, { dayISO = currentDayISO() } = {}) {
   const plateMode = plateModeFromCookMode(loadSportSurvey()?.cookMode);
   for (const slot of order) {
     const rows = bySlot.get(slot) || [];
-    if (!rows.length) continue;
     const mapTitle = mealMap?.[slot] && typeof mealMap[slot] === "object" ? mealMap[slot].title : mealMap?.[slot];
     const slotEntry = mealMap?.[slot] && typeof mealMap[slot] === "object" ? mealMap[slot] : null;
-    const dishTitle = String(mapTitle || rows[0].l.groupTitle || roleUa(slot)).trim();
-    const cook = cookForDishSlot(slot, rows[0].l.cook, dayISO);
+    if (!rows.length && !mapTitle) continue;
+    const dishTitle = String(mapTitle || rows[0]?.l?.groupTitle || roleUa(slot)).trim();
+    const cook = cookForDishSlot(slot, rows[0]?.l?.cook, dayISO);
     const cookUa = mealCookChipUa(cook);
     const stoveChip = cookUa
       ? `<span class="meal-dish__stove" data-cook="${esc(cook)}" title="Спосіб страви · не фільтр полиці">${esc(cookUa)}</span>`
@@ -10344,6 +11746,16 @@ function dayMealsHtml(meals, { dayISO = currentDayISO() } = {}) {
     if (!recipeHtml && plateMode === "ingredients" && cook === "ready") {
       const serveNote = resolveMealServeNote(dishTitle, slotEntry);
       recipeHtml = mealServeNoteHtml(serveNote, esc);
+    }
+    const pantryFromMap = expandMealStaples(
+      dishTitle,
+      Array.isArray(slotEntry?.staples) ? slotEntry.staples : typeof slotEntry === "string" ? [slotEntry] : [],
+    ).filter((s) => isPantryStaple(s));
+    let ingsHtml = rows.map(({ l, i }) => ingredientRow(l, i)).join("");
+    if (!rows.length && pantryFromMap.length) {
+      ingsHtml = `<p class="muted meal-dish__pantry">${esc(dayPlatePantryHintCopy(pantryFromMap))}</p>`;
+    } else if (rows.length && pantryFromMap.length) {
+      ingsHtml += `<p class="muted meal-dish__pantry">${esc(dayPlatePantryHintCopy(pantryFromMap))}</p>`;
     }
     blocks.push(`
       <article class="meal-dish" data-meal-slot="${esc(slot)}">
@@ -10356,7 +11768,7 @@ function dayMealsHtml(meals, { dayISO = currentDayISO() } = {}) {
           ${recipeHtml}
         </header>
         <div class="meal-dish__ings">
-          ${rows.map(({ l, i }) => ingredientRow(l, i)).join("")}
+          ${ingsHtml}
         </div>
       </article>`);
   }

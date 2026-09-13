@@ -6,6 +6,7 @@ import { mealMapStaples } from "./sport-ration-plan.js";
 
 const SPORT_DAYS_KEY = "silpo.sport.dayConfirms.v1";
 const PROGRAM_CHOSEN_KEY = "silpo.sport.programChosen.v1";
+const PROGRAM_ID_KEY = "silpo.sport.programId.v1";
 const RATION_COVERAGE_KEY = "silpo.sport.rationCoverage.v1";
 
 function monthKeyFromAt(at) {
@@ -116,12 +117,39 @@ export function hasChosenSportProgram(storage = globalThis.localStorage) {
   }
 }
 
+export function loadChosenSportProgramId(storage = globalThis.localStorage) {
+  try {
+    const id = storage?.getItem?.(PROGRAM_ID_KEY);
+    return typeof id === "string" && id.trim() ? id.trim() : "";
+  } catch {
+    return "";
+  }
+}
+
+export function saveChosenSportProgramId(programId, storage = globalThis.localStorage) {
+  const id = String(programId || "").trim();
+  if (!id) return "";
+  try {
+    storage?.setItem?.(PROGRAM_ID_KEY, id);
+  } catch {
+    /* ignore */
+  }
+  return id;
+}
+
 export function noteSportProgramChosen(storage = globalThis.localStorage) {
   try {
     storage?.setItem?.(PROGRAM_CHOSEN_KEY, "1");
   } catch {
     /* ignore */
   }
+}
+
+/** Flag + persist id (home step 3 / enterSportDay). */
+export function confirmSportProgramChoice(programId, storage = globalThis.localStorage) {
+  const id = saveChosenSportProgramId(programId, storage);
+  if (id) noteSportProgramChosen(storage);
+  return id;
 }
 
 /**
@@ -725,18 +753,21 @@ export function sportLast7DaysSeries({
  * Week buckets for Sport spark — reuses Express `buildMonthWeekChartSeries` mesh
  * so X-axis + prior week match spend; kcal = sum of price-based `estimateLineKcal`.
  * Session-only days may extend the mesh past last receipt via a zero-line stub.
- * @returns {Array<{ day: string, weekStart: string, dayNum: number, sessions: number, kcal: number, over: boolean, prior?: boolean, demo?: boolean }>}
+ * Foundation fields: `budgetKcal` (week ration орієнтир), `missed` (expected − done).
+ * @returns {Array<{ day: string, weekStart: string, dayNum: number, sessions: number, kcal: number, budgetKcal: number, missed: number, over: boolean, prior?: boolean, demo?: boolean }>}
  */
 export function sportMonthWeekChartSeries({
   receipts,
   monthKey,
   storage = globalThis.localStorage,
   dailyBudget = SPORT_DAILY_KCAL_BUDGET,
+  sessionGoal = SPORT_SESSION_GOAL,
 } = {}) {
   const base = Array.isArray(receipts) ? receipts : [];
   const mk = String(monthKey || currentMonthKey());
   const confirms = [...sportActivityDaySet(storage)];
   const weekBudget = Math.max(1, Number(dailyBudget) || SPORT_DAILY_KCAL_BUDGET) * 7;
+  const expectedPerWeek = Math.max(1, Math.round((Number(sessionGoal) || SPORT_SESSION_GOAL) / 4));
 
   /** Extend Express mesh when ritual days exist after last receipt. */
   let list = base;
@@ -774,17 +805,23 @@ export function sportMonthWeekChartSeries({
     return Math.round(kcal);
   };
 
+  const todayWs = weekStartISO(new Date().toISOString()) || "";
+
   const out = spendSeries.map((row) => {
     const ws = row.weekStart;
     const kcal = kcalInWeek(ws);
     const sessions = sessionsInWeek(ws);
     const d = new Date(`${ws}T12:00:00.000Z`);
+    const pastOrCurrent = !todayWs || String(ws) <= todayWs;
+    const missed = pastOrCurrent && !row.prior ? Math.max(0, expectedPerWeek - sessions) : 0;
     return {
       day: ws,
       weekStart: ws,
       dayNum: d.getUTCDate(),
       sessions,
       kcal,
+      budgetKcal: weekBudget,
+      missed,
       over: kcal > weekBudget,
       prior: Boolean(row.prior),
     };
@@ -796,7 +833,6 @@ export function sportMonthWeekChartSeries({
   const hasLiveKcal = live.some((x) => (Number(x.kcal) || 0) > 0);
   const hasAnySessions = out.some((x) => (Number(x.sessions) || 0) > 0);
   if (!hasLiveKcal && !hasAnySessions) {
-    const todayWs = weekStartISO(new Date().toISOString()) || "";
     const seed = [...mk].reduce((a, c) => a + c.charCodeAt(0), 0) || 7;
     for (let i = 0; i < out.length; i++) {
       if (out[i].prior) {
@@ -805,6 +841,8 @@ export function sportMonthWeekChartSeries({
           ...out[i],
           sessions: 1,
           kcal,
+          budgetKcal: weekBudget,
+          missed: Math.max(0, expectedPerWeek - 1),
           over: kcal > weekBudget,
           demo: true,
         };
@@ -814,7 +852,15 @@ export function sportMonthWeekChartSeries({
       if (todayWs && String(out[i].weekStart) > todayWs) continue;
       const sessions = (seed + i) % 3 === 0 ? 1 : 0;
       const kcal = 2200 + ((seed * (i + 3)) % 2800) + (i % 2 === 0 ? 400 : 0);
-      out[i] = { ...out[i], sessions, kcal, over: kcal > weekBudget, demo: true };
+      out[i] = {
+        ...out[i],
+        sessions,
+        kcal,
+        budgetKcal: weekBudget,
+        missed: Math.max(0, expectedPerWeek - sessions),
+        over: kcal > weekBudget,
+        demo: true,
+      };
     }
   }
   /* no sessionsDemo when kcal-only — keep blue line empty until real sessions */
@@ -833,7 +879,7 @@ export function sportExpressCardModel({
   const ritual = Math.max(0, Number(ritualDays) || 0);
   const goal = Math.max(1, Number(sessionGoal) || SPORT_SESSION_GOAL);
   const ration = sportRationMonthTotals(receipts, monthKey);
-  const series = sportMonthWeekChartSeries({ receipts, monthKey, storage, dailyBudget });
+  const series = sportMonthWeekChartSeries({ receipts, monthKey, storage, dailyBudget, sessionGoal: goal });
   const live = series.filter((d) => !d.prior);
   const chartKcal = live.reduce((s, d) => s + (Number(d.kcal) || 0), 0);
   const demo = series.some((d) => d.demo);

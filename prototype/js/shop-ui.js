@@ -221,7 +221,7 @@ export function shopReceiptAsciiBarHtml(budgetPct = 0, { cols = 96, over = false
 }
 
 /**
- * @param {{ okCount: number, totalCount: number, sumLabel: string, budgetLabel: string, acceptPct: number, budgetPct: number, over?: boolean, sportExtraN?: number, loading?: boolean, baseLabel?: string, moodLabel?: string, wasteLabel?: string, baseUah?: number, moodUah?: number, userWasteUah?: number, remainLabel?: string, remainOver?: boolean, whisperLine?: string, whisperHtml?: string, whisperTip?: string, innerFooterHtml?: string }}
+ * @param {{ okCount: number, totalCount: number, sumLabel: string, budgetLabel: string, acceptPct: number, budgetPct: number, over?: boolean, sportExtraN?: number, loading?: boolean, baseLabel?: string, moodLabel?: string, wasteLabel?: string, baseUah?: number, moodUah?: number, userWasteUah?: number, remainLabel?: string, remainOver?: boolean, whisperLine?: string, whisperHtml?: string, whisperTip?: string, innerFooterHtml?: string, controlsHtml?: string }}
  */
 export function shopProgressStripHtml(opts = {}) {
   if (opts.loading) {
@@ -253,8 +253,9 @@ export function shopProgressStripHtml(opts = {}) {
     (opts.whisperLine
       ? `<p class="shop-progress__whisper-line"${opts.whisperTip ? ` title="${opts.whisperTip}"` : ""}>${opts.whisperLine}</p>`
       : "");
+  const controlsHtml = String(opts.controlsHtml || "");
   const innerFooter = String(opts.innerFooterHtml || "");
-  const shellClass = innerFooter || whisperHtml ? " shop-progress__wallet-card--shell" : "";
+  const shellClass = innerFooter || whisperHtml || controlsHtml ? " shop-progress__wallet-card--shell" : "";
   const tight = !over && budgetPct >= 90;
   const totalLabel = opts.totalCount || opts.okCount;
   const sumText = String(opts.sumLabel || "—");
@@ -268,6 +269,7 @@ export function shopProgressStripHtml(opts = {}) {
           <div class="shop-progress__hero-main">
             <div class="shop-progress__receipt-sum-head">
               <span class="shop-progress__ticket-head">ЧЕК · <span class="num">${opts.okCount}/${totalLabel}</span> поз.</span>
+              ${controlsHtml}
               <span class="shop-progress__inline-sum num">${sumWithUah}</span>
               <div class="shop-progress__ticket-rule shop-progress__ticket-rule--dash" aria-hidden="true">- - - - - - - - - - - -</div>
             </div>

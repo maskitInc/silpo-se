@@ -20,6 +20,7 @@ export function emptyIntent(surface) {
       age: null,
       heightCm: null,
       weightKg: null,
+      targetWeightKg: null,
       bodyGoal: "",
       profileAt: "",
     },
@@ -35,6 +36,7 @@ export function assertIntent(raw) {
   const ageN = Number(c.age);
   const heightN = Number(c.heightCm);
   const weightN = Number(c.weightKg);
+  const targetWeightN = Number(c.targetWeightKg);
   return {
     surface: raw.surface,
     goal: String(raw.goal || ""),
@@ -52,6 +54,7 @@ export function assertIntent(raw) {
       age: Number.isFinite(ageN) ? Math.round(ageN) : null,
       heightCm: Number.isFinite(heightN) ? Math.round(heightN) : null,
       weightKg: Number.isFinite(weightN) ? Math.round(weightN) : null,
+      targetWeightKg: Number.isFinite(targetWeightN) ? Math.round(targetWeightN) : null,
       bodyGoal,
       profileAt: typeof c.profileAt === "string" ? c.profileAt : "",
     },

@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=390"/>
+<title>G1 Soft Super-app · real fixtures</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #F4F5F7;
+    --card: #FFFFFF;
+    --ink: #111111;
+    --muted: #8E8E93;
+    --sport: #34C759;
+    --sport-soft: #E8F8ED;
+    --express: #007AFF;
+    --express-soft: #E5F1FF;
+    --line: #E5E5EA;
+    --radius: 24px;
+    --shadow: 0 8px 24px rgba(0,0,0,.06);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #d8dce2;
+    display: flex;
+    justify-content: center;
+    padding: 16px;
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+  #phone {
+    width: 390px;
+    min-height: 780px;
+    background: var(--bg);
+    border-radius: 36px;
+    padding: 22px 16px 28px;
+    box-shadow: 0 20px 50px rgba(0,0,0,.12);
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .card {
+    background: var(--card);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 16px 14px 14px;
+    display: flex;
+    flex-direction: column;
+    min-height: 292px;
+  }
+  .icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    display: grid;
+    place-items: center;
+    margin: 0 auto 10px;
+  }
+  .icon.sport { background: var(--sport-soft); color: var(--sport); }
+  .icon.express { background: var(--express-soft); color: var(--express); }
+  .icon svg { display: block; }
+  .title {
+    text-align: center;
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin: 0 0 10px;
+  }
+  .metric {
+    text-align: center;
+    font-size: 40px;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    margin: 0;
+  }
+  .unit {
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+    margin: 6px 0 0;
+  }
+  .sub {
+    text-align: center;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+    margin: 4px 0 0;
+    line-height: 1.35;
+  }
+  .viz {
+    margin-top: 14px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 12px;
+  }
+  .spark {
+    width: 100%;
+    height: 42px;
+    display: block;
+  }
+  .dots {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    padding: 0 8px;
+  }
+  .dots .seg {
+    flex: 1;
+    height: 3px;
+    background: #E5E5EA;
+  }
+  .dots .seg.on { background: var(--sport); }
+  .dots .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #E5E5EA;
+    flex: 0 0 auto;
+    z-index: 1;
+  }
+  .dots .dot.on { background: var(--sport); }
+  .bar {
+    height: 8px;
+    border-radius: 999px;
+    background: #D6E8FF;
+    overflow: hidden;
+    margin: 4px 6px 0;
+  }
+  .bar > i {
+    display: block;
+    height: 100%;
+    width: 30.2%; /* 453/1500 */
+    border-radius: 999px;
+    background: var(--express);
+  }
+  .cta {
+    margin-top: 14px;
+    border: 0;
+    border-radius: 14px;
+    height: 44px;
+    color: #fff;
+    font: inherit;
+    font-size: 15px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+  }
+  .cta.sport { background: var(--sport); }
+  .cta.express { background: var(--express); }
+  .cta .chev { font-weight: 600; opacity: .95; }
+
+  .month {
+    margin-top: 12px;
+    background: var(--card);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 18px 16px 14px;
+  }
+  .month-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .month-head h2 {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .month-head .down {
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .chart {
+    width: 100%;
+    height: 148px;
+    display: block;
+  }
+  .xlabels {
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 4px 0;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  .chips {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .chip {
+    flex: 1;
+    text-align: center;
+    background: #F2F3F5;
+    border-radius: 12px;
+    padding: 8px 6px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+</style>
+</head>
+<body>
+  <div id="phone">
+    <div class="grid">
+      <!-- Sport -->
+      <article class="card" aria-label="Спорт">
+        <div class="icon sport" aria-hidden="true">
+          <!-- flat line dumbbell 2px -->
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <rect x="2.5" y="8" width="3.5" height="8" rx="1.2" stroke="currentColor" stroke-width="2"/>
+            <rect x="18" y="8" width="3.5" height="8" rx="1.2" stroke="currentColor" stroke-width="2"/>
+            <path d="M6 12h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <rect x="5.5" y="9.5" width="2" height="5" rx="0.8" stroke="currentColor" stroke-width="1.6"/>
+            <rect x="16.5" y="9.5" width="2" height="5" rx="0.8" stroke="currentColor" stroke-width="1.6"/>
+          </svg>
+        </div>
+        <h1 class="title">Спорт</h1>
+        <p class="metric">2/5</p>
+        <p class="unit">занять</p>
+        <p class="sub">лишилось 3</p>
+        <div class="viz">
+          <svg class="spark" viewBox="0 0 140 42" preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+              <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#34C759" stop-opacity=".28"/>
+                <stop offset="100%" stop-color="#34C759" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <path d="M0 30 C 18 28, 28 22, 42 24 C 58 26, 70 14, 86 16 C 104 18, 118 8, 140 10 L140 42 L0 42 Z" fill="url(#sg)"/>
+            <path d="M0 30 C 18 28, 28 22, 42 24 C 58 26, 70 14, 86 16 C 104 18, 118 8, 140 10" fill="none" stroke="#34C759" stroke-width="2.2" stroke-linecap="round"/>
+          </svg>
+          <div class="dots" aria-label="2 з 5">
+            <span class="dot on"></span><span class="seg on"></span>
+            <span class="dot on"></span><span class="seg"></span>
+            <span class="dot"></span><span class="seg"></span>
+            <span class="dot"></span><span class="seg"></span>
+            <span class="dot"></span>
+          </div>
+        </div>
+        <button type="button" class="cta sport">Пігнали <span class="chev">›</span></button>
+      </article>
+
+      <!-- Express -->
+      <article class="card" aria-label="Експрес">
+        <div class="icon express" aria-hidden="true">
+          <!-- flat grocery tote / bag line icon -->
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M6.5 8.5h11l-.8 11.2a1.6 1.6 0 0 1-1.6 1.5H8.9a1.6 1.6 0 0 1-1.6-1.5L6.5 8.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+            <path d="M9 8.5V7.2a3 3 0 0 1 6 0v1.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <path d="M9.5 12.5h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <h1 class="title">Експрес</h1>
+        <p class="metric">453 ₴</p>
+        <p class="unit">залишилось</p>
+        <p class="sub">1 500 ₴ ліміт<br/>витрачено 1 047 ₴</p>
+        <div class="viz">
+          <div class="bar" role="progressbar" aria-valuenow="453" aria-valuemin="0" aria-valuemax="1500"><i></i></div>
+        </div>
+        <button type="button" class="cta express">Замовити <span class="chev">›</span></button>
+      </article>
+    </div>
+
+    <!-- Month -->
+    <section class="month" aria-label="Деталі місяця">
+      <div class="month-head">
+        <h2>Деталі місяця</h2>
+        <span class="down" aria-hidden="true">⌄</span>
+      </div>
+      <svg class="chart" viewBox="0 0 340 148" preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="gFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#34C759" stop-opacity=".22"/>
+            <stop offset="100%" stop-color="#34C759" stop-opacity="0"/>
+          </linearGradient>
+          <linearGradient id="bFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#007AFF" stop-opacity=".18"/>
+            <stop offset="100%" stop-color="#007AFF" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <!-- sessions soft (1,1,0,0) mapped gently -->
+        <path d="M8 88 C 50 78, 90 74, 120 70 C 160 64, 200 92, 240 98 C 280 104, 310 100, 332 96 L332 140 L8 140 Z" fill="url(#gFill)"/>
+        <path d="M8 88 C 50 78, 90 74, 120 70 C 160 64, 200 92, 240 98 C 280 104, 310 100, 332 96" fill="none" stroke="#34C759" stroke-width="2.4" stroke-linecap="round"/>
+        <!-- spend 180,290,410,167 -->
+        <path d="M8 108 C 50 100, 90 82, 120 70 C 155 52, 185 28, 220 22 C 255 18, 290 70, 332 88 L332 140 L8 140 Z" fill="url(#bFill)"/>
+        <path d="M8 108 C 50 100, 90 82, 120 70 C 155 52, 185 28, 220 22 C 255 18, 290 70, 332 88" fill="none" stroke="#007AFF" stroke-width="2.4" stroke-linecap="round"/>
+        <line x1="8" y1="140" x2="332" y2="140" stroke="#E5E5EA" stroke-width="1"/>
+      </svg>
+      <div class="xlabels">
+        <span>31</span><span>7</span><span>14</span><span>21</span>
+      </div>
+      <div class="chips">
+        <div class="chip">2/5</div>
+        <div class="chip">1047/1500</div>
+        <div class="chip">19 дн.</div>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

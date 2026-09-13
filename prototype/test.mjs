@@ -200,19 +200,44 @@ if (!nameMatchesQuery("Філе хека свіже", "риба")) throw new Err
   sport.constraints.programId = "asian-walk";
   const c = compose(sport, kb);
   const qs = c.shopQueries.map((q) => q.q);
-  if (qs.join("|") !== "вівсянка|молоко|рис|овочі|риба|салат") throw new Error(`cardio meals ${qs}`);
+  /* tasty agent expands «овочі»; day compose strips pantry packs (олія/рис/йогурт). */
+  if (!qs.includes("помідор") || !qs.includes("огірок")) {
+    throw new Error(`cardio veg expand ${qs}`);
+  }
+  if (qs.includes("олія") || qs.includes("рис") || qs.includes("вівсянка") || qs.includes("йогурт")) {
+    throw new Error(`day compose must strip pantry packs got ${qs}`);
+  }
+  if (qs.includes("овочі")) throw new Error(`macro овочі must expand got ${qs}`);
   if (!c.shopQueries.every((q) => q.groupTitle)) throw new Error("dish titles required");
+  const weekQs = sportShopQueriesFromMealMap(kb.mealMaps.cardio, { pantryMode: "include" }).map((q) => q.q);
+  if (!weekQs.includes("олія") || !weekQs.includes("рис") || !weekQs.includes("вівсянка")) {
+    throw new Error(`week include must keep pantry ${weekQs}`);
+  }
   sport.constraints.programId = "stretch";
   const m = compose(sport, kb).shopQueries.map((q) => q.q);
-  if (m.join("|") !== "йогурт|салат|зелень|овочі|цибуля") throw new Error(`mobility meals ${m}`);
+  if (m.includes("йогурт")) throw new Error(`mobility day must strip yogurt pantry got ${m}`);
+  if (!m.includes("салат") && !m.some((x) => /курка|індичка|тунець|риба|лосось/.test(x))) {
+    throw new Error(`mobility day meals ${m}`);
+  }
+  if (!m.includes("помідор") && !m.includes("огірок") && !m.includes("зелень")) throw new Error(`mobility veg ${m}`);
   sport.constraints.programId = "military";
   const st = compose(sport, kb);
-  if (st.shopQueries.map((q) => q.q).join("|") !== "яйця|масло|курка|гречка|овочі|йогурт") {
-    throw new Error(`strength meals ${st.shopQueries.map((q) => q.q)}`);
+  const stq = st.shopQueries.map((q) => q.q);
+  if (!stq.includes("яйця") || !stq.includes("курка")) {
+    throw new Error(`strength meals ${stq}`);
   }
+  if (stq.includes("гречка") || stq.includes("олія")) {
+    throw new Error(`strength day must strip pantry grains/oil got ${stq}`);
+  }
+  if (!stq.includes("помідор") || !stq.includes("огірок")) throw new Error(`strength veg expand ${stq}`);
   if (st.shopQueries.find((q) => q.group === "breakfast")?.groupTitle !== "Яєчня") {
     throw new Error("Яєчня title missing");
   }
+  const { expandMealStaples, assertTastyMealPack } = await import("./js/meal-ration-agent.js");
+  const thin = expandMealStaples("Рис з овочами", ["рис", "овочі"]);
+  if (thin.length < 4 || thin.includes("овочі")) throw new Error(`expand thin ${thin}`);
+  if (!assertTastyMealPack("Рис з овочами", ["рис", "овочі"]).ok) throw new Error("tasty gate failed");
+  if (!assertTastyMealPack("Рис з овочами", ["рис"]).ok) throw new Error("expand should rescue rice+veg title");
 }
 const yogurtTree = slugsForStaple(
   {
@@ -1269,7 +1294,9 @@ if (productImage({}) !== "") throw new Error("productImage empty");
     sportDaysInMonth,
     sportHomeStripCta,
     noteSportProgramChosen,
+    confirmSportProgramChoice,
     hasChosenSportProgram,
+    loadChosenSportProgramId,
     sportOrientirModel,
     sportMonthKeys,
     sportShaftWaveSvg,
@@ -1355,6 +1382,19 @@ if (productImage({}) !== "") throw new Error("productImage empty");
   if (!hasChosenSportProgram(emptyMem)) throw new Error("programChosen flag");
   const ownedCta = sportHomeStripCta(ritualModel, emptyMem);
   if (ownedCta.go !== "day" || ownedCta.label !== "день і полиця") throw new Error(`owned cta ${JSON.stringify(ownedCta)}`);
+  const pickMem = {
+    store: {},
+    getItem(k) {
+      return this.store[k] ?? null;
+    },
+    setItem(k, v) {
+      this.store[k] = String(v);
+    },
+  };
+  confirmSportProgramChoice("afrobeat", pickMem);
+  if (!hasChosenSportProgram(pickMem) || loadChosenSportProgramId(pickMem) !== "afrobeat") {
+    throw new Error("confirmSportProgramChoice should persist id + flag");
+  }
   const series = visitWeekSeriesFromPulse([{ weekStart: "2026-08-04", receiptCount: 2, uah: 10 }]);
   if (series[0].uah !== 2) throw new Error("visitWeekSeries maps receiptCount");
 
@@ -1738,10 +1778,17 @@ if (productImage({}) !== "") throw new Error("productImage empty");
     "./js/program-art-map.js"
   );
   const { programsForHome } = await import("./js/sport-profile.js");
+  const { existsSync } = await import("node:fs");
+  const { join, dirname } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const rootDir = dirname(fileURLToPath(import.meta.url));
   const homeIds = programsForHome(kb.programs).map((p) => p.id);
   for (const id of homeIds) {
     if (!hasProgramThumb(id)) throw new Error(`program thumb missing: ${id}`);
+    if (!PROGRAM_THUMBS[id]?.startsWith("/content/programs/")) throw new Error(`program thumb abs ${id}`);
     if (!PROGRAM_THUMBS[id]?.includes(`${id}-thumb.png`)) throw new Error(`program thumb path ${id}`);
+    const disk = join(rootDir, "content", "programs", `${id}-thumb.png`);
+    if (!existsSync(disk)) throw new Error(`program thumb file missing ${disk}`);
     const hit = resolveProgramThumb(id, []);
     if (!hit || hit.source !== "program") throw new Error(`resolveProgramThumb ${id} ${JSON.stringify(hit)}`);
   }
@@ -2036,6 +2083,8 @@ if (productImage({}) !== "") throw new Error("productImage empty");
     programsForHome,
     suggestLevelFromProfile,
     estimateDailyKcalFromProfile,
+    defaultTargetWeightKg,
+    estimateMonthsToWeightGoal,
     BODY_GOAL_TO_TRAINING,
   } = await import("./js/sport-profile.js");
   const incomplete = normalizeSportProfile({ sex: "female", age: 30 });
@@ -2060,7 +2109,11 @@ if (productImage({}) !== "") throw new Error("productImage empty");
     memP,
   );
   if (!profileIsComplete(saved)) throw new Error("profile complete");
+  if (saved.targetWeightKg !== 55) throw new Error(`default target −7 got ${saved.targetWeightKg}`);
   if (loadSportProfile(memP).bodyGoal !== "lose") throw new Error("profile load");
+  const bal = normalizeSportProfile({ ...saved, bodyGoal: "maintain", targetWeightKg: 99 });
+  if (bal.targetWeightKg !== 62) throw new Error(`maintain mirrors weight got ${bal.targetWeightKg}`);
+  if (defaultTargetWeightKg(60, "gain") !== 67) throw new Error("default +7");
   if (BODY_GOAL_TO_TRAINING.lose !== "cardio") throw new Error("goal map");
   const homeOnly = programsForHome(kb.programs);
   if (homeOnly.some((p) => p.place === "outdoor")) throw new Error("home filter");
@@ -2071,6 +2124,17 @@ if (productImage({}) !== "") throw new Error("productImage empty");
   const kcalM = estimateDailyKcalFromProfile({ ...saved, sex: "male" });
   if (!(kcalM > kcalF)) throw new Error(`sex kcal ${kcalM} vs ${kcalF}`);
   if (kcalF < 1400 || kcalF > 3500) throw new Error(`kcal bounds ${kcalF}`);
+  const afroEta = estimateMonthsToWeightGoal(saved, "afrobeat");
+  const taiEta = estimateMonthsToWeightGoal(saved, "tai-chi");
+  if (!(afroEta >= 2 && afroEta <= 4.5)) throw new Error(`afrobeat ETA ${afroEta}`);
+  if (!(taiEta > afroEta)) throw new Error(`tai-chi slower ${taiEta} vs ${afroEta}`);
+  const afroEtaHard = estimateMonthsToWeightGoal(saved, "afrobeat", { sessionBurnKcal: 132 });
+  if (!(afroEtaHard < afroEta)) throw new Error(`session burn should shorten ETA ${afroEtaHard} vs ${afroEta}`);
+  const maintainEta = estimateMonthsToWeightGoal({ ...saved, bodyGoal: "maintain", targetWeightKg: 62 }, "afrobeat");
+  if (maintainEta != null) throw new Error(`maintain ETA ${maintainEta}`);
+  const { programPickerMetaLine } = await import("./js/program-art-map.js");
+  const etaMeta = programPickerMetaLine({ id: "afrobeat", goal: "cardio" }, saved, true);
+  if (!/міс/.test(etaMeta)) throw new Error(`ETA meta ${etaMeta}`);
   const {
     resolveMealTrainingGoal,
     mealGoalDiffersFromProgram,
@@ -2079,9 +2143,9 @@ if (productImage({}) !== "") throw new Error("productImage empty");
   if (!mealGoalDiffersFromProgram("strength", saved)) throw new Error("meal goal differs");
   const { sessionFor, compose } = await import("./js/composer.js");
   const milF = sessionFor(kb, "military", "beginner", { sex: "female" });
-  if (!/Планка 15 с/.test(milF[0] || "")) throw new Error(`female military ${milF[0]}`);
+  if (!/Планка 30 с/.test(milF.join(" ") || "")) throw new Error(`female military ${milF[0]}`);
   const milM = sessionFor(kb, "military", "beginner", { sex: "male" });
-  if (!/Планка 20 с/.test(milM[0] || "")) throw new Error(`male military ${milM[0]}`);
+  if (!/Планка 45 с/.test(milM.join(" ") || "")) throw new Error(`male military ${milM[0]}`);
   const homeFemale = ["afrobeat", "stretch", "tai-chi", "chair-yoga", "core-mobility", "calisthenics"];
   for (const pid of homeFemale) {
     const f = sessionFor(kb, pid, "beginner", { sex: "female" });
@@ -2090,7 +2154,7 @@ if (productImage({}) !== "") throw new Error("productImage empty");
     if (JSON.stringify(f) === JSON.stringify(m)) throw new Error(`female load same as male ${pid}`);
   }
   const afroF = sessionFor(kb, "afrobeat", "beginner", { sex: "female" });
-  if (!/Крок на місці 1 хв/.test(afroF[0] || "")) throw new Error(`afrobeat female ${afroF[0]}`);
+  if (!/Крок на місці 5 хв/.test(afroF[0] || "")) throw new Error(`afrobeat female ${afroF[0]}`);
   const { buildSportRationPlan } = await import("./js/sport-survey.js");
   const planLose = buildSportRationPlan({
     kb,
@@ -2101,24 +2165,34 @@ if (productImage({}) !== "") throw new Error("productImage empty");
     profile: saved,
   });
   if (planLose.goal !== "cardio") throw new Error(`plan goal ${planLose.goal}`);
-  if (!planLose.queries.some((q) => /вівсянка|рис|йогурт/.test(String(q.staple || q.q)))) {
+  if (!planLose.queries.some((q) => /вівсянка|рис|йогурт|курка|риба/.test(String(q.staple || q.q)))) {
     throw new Error(`plan lose staples ${JSON.stringify(planLose.queries)}`);
   }
-  /* byBodyGoal: lose→cardio + yogurt; overlay after course (Mon fish → yogurt) */
+  /* lose→cardio course (no yogurt stamp): Mon chicken lunch; Tue fish dinner */
   const { applyBodyGoalMealOverlay, resolveGoalMealMap } = await import("./js/composer.js");
   const loseMap = resolveGoalMealMap(kb, "strength", saved);
-  if (loseMap.dinner?.title !== "Йогурт на вечір") throw new Error(`lose overlay dinner ${loseMap.dinner?.title}`);
-  if (!loseMap.dinner?.staples?.includes("йогурт")) throw new Error("lose overlay yogurt staple");
+  if (loseMap.dinner?.title !== "Риба з салатом") throw new Error(`lose static dinner ${loseMap.dinner?.title}`);
   const loseMon = resolveGoalMealMap(kb, "strength", saved, { dayISO: "2026-08-24" });
-  if (loseMon.dinner?.title !== "Йогурт на вечір") {
-    throw new Error(`lose+course dinner should stay yogurt got ${loseMon.dinner?.title}`);
+  if (!loseMon.lunch?.staples?.includes("курка")) {
+    throw new Error(`lose Mon lunch needs chicken got ${JSON.stringify(loseMon.lunch)}`);
   }
+  const loseTue = resolveGoalMealMap(kb, "strength", saved, { dayISO: "2026-08-25" });
+  if (!loseTue.dinner?.staples?.some((s) => /риба|тунець|лосось|хек|скумбрія/.test(String(s)))) {
+    throw new Error(`lose Tue dinner needs fish got ${JSON.stringify(loseTue.dinner)}`);
+  }
+  const { weekCourseProteinVariety, weekCourseBreakfastVariety } = await import("./js/sport-week-ration.js");
+  const cardioVar = weekCourseProteinVariety(kb.mealMaps.cardio);
+  if (!cardioVar.ok) throw new Error(`cardio week protein variety ${JSON.stringify(cardioVar)}`);
+  const strengthVar = weekCourseProteinVariety(kb.mealMaps.strength);
+  if (!strengthVar.ok) throw new Error(`strength week protein variety ${JSON.stringify(strengthVar)}`);
+  const cardioBf = weekCourseBreakfastVariety(kb.mealMaps.cardio);
+  if (!cardioBf.ok) throw new Error(`cardio breakfast variety ${JSON.stringify(cardioBf)}`);
   const gainSaved = { ...saved, bodyGoal: "gain", sex: "male" };
   const gainMap = resolveGoalMealMap(kb, "military", gainSaved);
   if (gainMap.dinner?.title !== "Риба з салатом") throw new Error(`gain overlay ${gainMap.dinner?.title}`);
   const plain = applyBodyGoalMealOverlay(kb.mealMaps.cardio, "");
   if (plain.dinner?.title !== "Риба з салатом") throw new Error("no overlay passthrough");
-  /* byCookMode.ready — culinary mealMap wins after bodyGoal */
+  /* byCookMode.ready — culinary mealMap wins after bodyGoal; course[day] varies by weekday */
   const { applyCookModeMealOverlay } = await import("./js/composer.js");
   const readyMap = resolveGoalMealMap(kb, "cardio", saved, { cookMode: "ready", dayISO: "2026-08-27" });
   if (readyMap.lunch?.title !== "Курка гриль · кулінарія") {
@@ -2129,6 +2203,15 @@ if (productImage({}) !== "") throw new Error("productImage empty");
   }
   if (readyMap.dinner?.title !== "Салат овочевий · кулінарія") {
     throw new Error(`ready dinner ${readyMap.dinner?.title}`);
+  }
+  const readyMon = resolveGoalMealMap(kb, "cardio", saved, { cookMode: "ready", dayISO: "2026-08-24" });
+  const readyTue = resolveGoalMealMap(kb, "cardio", saved, { cookMode: "ready", dayISO: "2026-08-25" });
+  if (readyMon.lunch?.title === readyTue.lunch?.title && readyMon.breakfast?.title === readyTue.breakfast?.title) {
+    throw new Error(`ready course must differ Mon/Tue got ${readyMon.lunch?.title} / ${readyTue.lunch?.title}`);
+  }
+  const { weekHasDistinctDayRations: readyWeekDistinct } = await import("./js/sport-week-ration.js");
+  if (!readyWeekDistinct(kb, "cardio", saved, "2026-08-24", "ready")) {
+    throw new Error("ready week must be distinct");
   }
   const cookMap = resolveGoalMealMap(kb, "cardio", saved, { cookMode: "cook", dayISO: "2026-08-27" });
   if (/кулінар/i.test(String(cookMap.lunch?.title || ""))) {
@@ -2305,7 +2388,7 @@ if (productImage({}) !== "") throw new Error("productImage empty");
 }
 
 {
-  /* Epic 5.4 — week-course title overlay (staples unchanged; soft-hop safe) */
+  /* Epic week-ration — course overlays titles + staples (7 distinct product sets) */
   if (weekdayIndexFromDayISO("2026-08-24") !== 0) throw new Error("weekday Mon");
   if (weekdayIndexFromDayISO("2026-08-25") !== 1) throw new Error("weekday Tue");
   const strengthMap = kb.mealMaps.strength;
@@ -2320,7 +2403,8 @@ if (productImage({}) !== "") throw new Error("productImage empty");
   const monStaples = JSON.stringify(mon.breakfast?.staples);
   const tueStaples = JSON.stringify(tue.breakfast?.staples);
   if (monStaples !== JSON.stringify(["яйця", "масло"])) throw new Error(`mon staples ${monStaples}`);
-  if (tueStaples !== monStaples) throw new Error(`tue staples drifted ${tueStaples}`);
+  if (tueStaples !== JSON.stringify(["яйця", "молоко"])) throw new Error(`tue staples ${tueStaples}`);
+  if (monStaples === tueStaples) throw new Error("Mon/Tue staples must differ");
   if (mon.breakfast?.cook !== "cook" || tue.breakfast?.cook !== "cook") {
     throw new Error("course must keep base cook");
   }
@@ -2334,19 +2418,61 @@ if (productImage({}) !== "") throw new Error("productImage empty");
   const cardioMon = pickMealMapForDay(kb.mealMaps.cardio, "2026-08-24");
   const cardioTue = pickMealMapForDay(kb.mealMaps.cardio, "2026-08-25");
   if (cardioMon.breakfast?.title !== "Вівсянка на молоці") throw new Error(`cardio mon ${cardioMon.breakfast?.title}`);
-  if (cardioTue.breakfast?.title !== "Вівсянка") throw new Error(`cardio tue ${cardioTue.breakfast?.title}`);
-  if (JSON.stringify(cardioMon.breakfast?.staples) !== JSON.stringify(cardioTue.breakfast?.staples)) {
-    throw new Error("cardio staples drifted");
+  if (cardioTue.breakfast?.title !== "Яєчня з огірком") throw new Error(`cardio tue ${cardioTue.breakfast?.title}`);
+  if (JSON.stringify(cardioMon.breakfast?.staples) === JSON.stringify(cardioTue.breakfast?.staples)) {
+    throw new Error("cardio staples must differ Mon/Tue");
   }
+  if (cardioMon.breakfast?.staples?.[0] === cardioTue.breakfast?.staples?.[0]) {
+    throw new Error("cardio breakfast lead staple must differ Mon/Tue");
+  }
+  const { pickCollapsedWeekThumbs } = await import("./js/sport-week-ration.js");
+  const thumbA = pickCollapsedWeekThumbs(
+    [
+      { wanted: "вівсянка", name: "Oats", image: "a.png" },
+      { wanted: "курка", name: "Chicken", image: "b.png" },
+    ],
+    { demoteWanted: new Set(["вівсянка"]), limit: 2 },
+  );
+  if (thumbA[0]?.wanted !== "курка") throw new Error(`thumb demote ${JSON.stringify(thumbA)}`);
   const mobMon = pickMealMapForDay(kb.mealMaps.mobility, "2026-08-24");
   const mobTue = pickMealMapForDay(kb.mealMaps.mobility, "2026-08-25");
   if (mobMon.breakfast?.title !== "Йогурт") throw new Error(`mob mon ${mobMon.breakfast?.title}`);
   if (mobTue.breakfast?.title !== "Йогурт з ягодами") throw new Error(`mob tue ${mobTue.breakfast?.title}`);
-  if (JSON.stringify(mobMon.lunch?.staples) !== JSON.stringify(["салат", "зелень"])) {
+  if (!mobMon.lunch?.staples?.includes("курка") && !mobMon.lunch?.staples?.includes("салат")) {
     throw new Error(`mob lunch staples ${JSON.stringify(mobMon.lunch?.staples)}`);
+  }
+  if (JSON.stringify(mobTue.lunch?.staples) === JSON.stringify(mobMon.lunch?.staples)) {
+    throw new Error("mobility lunch staples must differ Mon/Tue");
   }
   if (mealMapStaples(kb, "afrobeat").includes("course")) throw new Error("cardio staples leaked course");
   if (mealMapStaples(kb, "stretch").includes("course")) throw new Error("mobility staples leaked course");
+  const {
+    weekDayISOs,
+    calendarWeekDayISOs,
+    weekHasDistinctDayRations,
+    buildWeekRationSoftQueries,
+    clampWeekBudgetUah,
+  } = await import("./js/sport-week-ration.js");
+  const week = weekDayISOs("2026-08-26");
+  if (week.length !== 7 || week[0] !== "2026-08-26" || week[6] !== "2026-09-01") {
+    throw new Error(`week days forward ${JSON.stringify(week)}`);
+  }
+  const cal = calendarWeekDayISOs("2026-08-26");
+  if (cal.length !== 7 || cal[0] !== "2026-08-24" || cal[6] !== "2026-08-30") {
+    throw new Error(`calendar week ${JSON.stringify(cal)}`);
+  }
+  if (!weekHasDistinctDayRations(kb, "strength", null, "2026-08-24")) {
+    throw new Error("strength week must be distinct");
+  }
+  const soft = buildWeekRationSoftQueries({
+    kb,
+    programId: "military",
+    level: "beginner",
+    anchorISO: "2026-08-24",
+    prefs: { cookMode: "any", avoidIds: [], dietTags: [] },
+  });
+  if (soft.uniqueStaples < 8) throw new Error(`week unique staples ${soft.uniqueStaples}`);
+  if (clampWeekBudgetUah(1234) !== 1250) throw new Error("budget clamp");
 }
 
 {
@@ -2566,6 +2692,26 @@ if (productImage({}) !== "") throw new Error("productImage empty");
     innerFooterHtml: '<div class="shop-controls shop-controls--wallet"></div>',
   });
   if (!/shop-progress__wallet-card--shell/.test(shellStrip)) throw new Error("wallet shell class");
+  const controlsAbove = shopProgressStripHtml({
+    okCount: 2,
+    totalCount: 2,
+    sumLabel: "1435,34",
+    budgetLabel: "1500",
+    acceptPct: 100,
+    budgetPct: 95,
+    controlsHtml: '<div class="shop-controls shop-controls--wallet" id="test-hz-bud"></div>',
+    innerFooterHtml: '<div class="shop-progress__meta-orange">orange</div>',
+  });
+  const sumIdx = controlsAbove.indexOf("shop-progress__inline-sum");
+  const ctrlIdx = controlsAbove.indexOf("test-hz-bud");
+  const foldIdx = controlsAbove.indexOf("shop-progress__receipt-fold");
+  if (ctrlIdx < 0 || sumIdx < 0 || ctrlIdx > sumIdx) {
+    throw new Error(`controls must sit above inline-sum ctrl=${ctrlIdx} sum=${sumIdx}`);
+  }
+  if (foldIdx > 0 && foldIdx < sumIdx) throw new Error("fold must stay after money sum");
+  if (!controlsAbove.includes("shop-progress__wallet-card--shell")) {
+    throw new Error("controlsHtml alone should still shell the wallet card");
+  }
   const cta = shopDockCtaHtml({ okCount: 5, sumLabel: "400" });
   if (!/dock-cta__sum/.test(cta) || !/Погодити 5/.test(cta)) throw new Error(`dock cta ${cta}`);
   const ctaResolving = shopDockCtaHtml({ okCount: 5, sumLabel: "400", resolving: true });

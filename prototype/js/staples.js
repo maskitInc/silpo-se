@@ -99,6 +99,8 @@ export function searchKeys(q) {
   const extra = {
     хліб: ["цар-хліб", "кулиничі"],
     овочі: ["огірок", "помідор"],
+    помідор: ["помідор", "томати"],
+    олія: ["олія соняшникова", "олія оливкова"],
     яйця: ["яйце", "яйця курячі", "яйця с1"],
     "гель для душу": ["гель душ"],
     молоко: ["молоко 2.5"],
@@ -349,6 +351,19 @@ export function rankProducts(list, ctx) {
     .map((x) => x.p);
 }
 
+/** Stable 0..n-1 index from seed (dayISO+staple) — variety without Math.random. */
+export function pickIndexBySeed(seed, n) {
+  const len = Math.max(0, Math.floor(Number(n) || 0));
+  if (len <= 1) return 0;
+  let h = 2166136261;
+  const s = String(seed || "");
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) % len;
+}
+
 export function pickMatchingProduct(list, q, ctx = {}) {
   const staple = ctx.staple || q;
   const freq = ctx.freq || {};
@@ -359,12 +374,41 @@ export function pickMatchingProduct(list, q, ctx = {}) {
   const hint = ctx.hint || null;
   const allowCatalogFallback = Boolean(ctx.allowCatalogFallback);
   const scoreCtx = { staple, freq, kind, priceMin, priceMax, hint, allowCatalogFallback };
-  const ranked = rankProducts(list, scoreCtx);
-  if (ranked[0]) return ranked[0];
+  const scored = (Array.isArray(list) ? list : [])
+    .map((p) => ({ p, s: scoreProduct(p, scoreCtx) }))
+    .filter((x) => x.s >= 0)
+    .sort((a, b) => b.s - a.s);
+  const pickFromScored = (rows) => {
+    if (!rows.length) return null;
+    const best = rows[0].s;
+    const near = rows.filter((x) => x.s >= best - 8).slice(0, 4);
+    const seed = `${ctx.dayISO || ctx.varietySeed || ""}|${staple}|${q || ""}`;
+    const idx = pickIndexBySeed(seed, near.length);
+    return near[idx]?.p || rows[0].p;
+  };
+  const top = pickFromScored(scored);
+  if (top) return top;
   if (hasHist && !allowCatalogFallback) return null;
   if (kind && ctx.allowKindFallback) {
-    return rankProducts(list, { ...scoreCtx, freq: hasHist ? {} : freq, kind: null })[0] || null;
+    return pickFromScored(
+      (Array.isArray(list) ? list : [])
+        .map((p) => ({ p, s: scoreProduct(p, { ...scoreCtx, freq: hasHist ? {} : freq, kind: null }) }))
+        .filter((x) => x.s >= 0)
+        .sort((a, b) => b.s - a.s),
+    );
   }
-  if (!hasHist) return rankProducts(list, { ...scoreCtx, kind: null })[0] || null;
-  return rankProducts(list, { ...scoreCtx, freq: {}, kind: null })[0] || null;
+  if (!hasHist) {
+    return pickFromScored(
+      (Array.isArray(list) ? list : [])
+        .map((p) => ({ p, s: scoreProduct(p, { ...scoreCtx, kind: null }) }))
+        .filter((x) => x.s >= 0)
+        .sort((a, b) => b.s - a.s),
+    );
+  }
+  return pickFromScored(
+    (Array.isArray(list) ? list : [])
+      .map((p) => ({ p, s: scoreProduct(p, { ...scoreCtx, freq: {}, kind: null }) }))
+      .filter((x) => x.s >= 0)
+      .sort((a, b) => b.s - a.s),
+  );
 }

@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8"/>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet"/>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#e8ddd4;display:flex;justify-content:center;padding:20px;
+    font-family:Manrope,system-ui,sans-serif;color:#2a2420}
+  .card{
+    width:340px;height:340px;
+    background:linear-gradient(165deg,#f9ece4 0%,#f2d7cb 100%);
+    border-radius:26px;padding:12px 12px 11px;
+    display:flex;flex-direction:column;gap:8px;
+    box-shadow:0 8px 22px rgba(60,40,30,.10);
+  }
+  .head{display:flex;flex-direction:column;align-items:center;gap:0;flex:0 0 auto}
+  .head img{width:78px;height:48px;object-fit:contain;display:block}
+  .head h1{margin:0;font-family:Fraunces,serif;font-size:22px;font-weight:700;letter-spacing:-.02em;line-height:1.1}
+  .today{
+    flex:1 1 auto;min-height:0;
+    display:grid;grid-template-columns:1fr 76px;gap:6px;align-items:center;
+    padding:10px 8px 10px 12px;border-radius:16px;
+    background:rgba(255,255,255,.55);border:1px solid rgba(255,255,255,.55);
+  }
+  .kicker{margin:0 0 2px;font-size:11px;font-weight:800;color:#e86a4a}
+  .name{margin:0;font-family:Fraunces,serif;font-size:26px;font-weight:700;line-height:1.05}
+  .dose{margin:3px 0 0;font-size:12px;font-weight:650;color:#7a6f68}
+  /* Icon slot: reserved area, NO dark well — transparent PNG + leaf tint (session-guide thumb) */
+  .art{
+    width:76px;height:76px;display:grid;place-items:center;
+    background:transparent;border:0;padding:0;
+  }
+  .art img{
+    width:72px;height:72px;object-fit:contain;display:block;
+    /* white line art → leaf ink on frost; soft presence without tile */
+    filter:brightness(0) saturate(100%) invert(32%) sepia(28%) saturate(700%) hue-rotate(95deg) brightness(0.95)
+      drop-shadow(0 2px 4px rgba(42,50,40,.12));
+  }
+  .prog{display:grid;gap:4px;flex:0 0 auto}
+  .row{display:flex;justify-content:space-between;font-size:12px;font-weight:800}
+  .row span:last-child{font-weight:650;color:#7a6f68;font-size:11px}
+  .bar{height:8px;border-radius:999px;background:rgba(255,255,255,.75);overflow:hidden}
+  .bar i{display:block;width:40%;height:100%;background:#e86a4a;border-radius:inherit}
+  .cta{flex:0 0 auto;border:0;border-radius:999px;padding:11px 12px;background:#e86a4a;color:#fff;
+    font:inherit;font-weight:800;font-size:14px;text-align:center}
+</style>
+</head>
+<body>
+<article class="card" id="sport-card">
+  <header class="head">
+    <img src="./dumbbell-3d-from-h1.png" alt="" width="240" height="122"/>
+    <h1>Спорт</h1>
+  </header>
+  <section class="today">
+    <div>
+      <p class="kicker">Сьогодні</p>
+      <p class="name">Планка</p>
+      <p class="dose">20 с × 3 · ~12 хв</p>
+    </div>
+    <div class="art" aria-hidden="false"><img src="./plank-guide-frame-1.png" alt="Планка"/></div>
+  </section>
+  <div class="prog">
+    <div class="row"><span>2/5 занять</span><span>лишилось 3</span></div>
+    <div class="bar"><i></i></div>
+  </div>
+  <button class="cta" type="button">Пігнали →</button>
+</article>
+</body>
+</html>

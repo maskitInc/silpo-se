@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=390" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --peach: #f6e6dc;
+      --peach-card: #f3ddd2;
+      --coral: #e86a4a;
+      --ink: #2a2420;
+      --muted: #7a6f68;
+      --cream: #faf4ee;
+      --well: #2f3d35;
+      --leaf: #318454;
+      --sage: #e8f0e6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #cfc4ba;
+      font-family: Manrope, system-ui, sans-serif;
+      color: var(--ink);
+      display: flex;
+      justify-content: center;
+      padding: 16px;
+    }
+    .phone {
+      width: 390px;
+      background:
+        radial-gradient(120px 80px at 8% 6%, rgba(210,160,90,.25), transparent 70%),
+        radial-gradient(90px 70px at 92% 8%, rgba(120,160,110,.18), transparent 70%),
+        var(--cream);
+      border-radius: 36px;
+      padding: 18px 14px 22px;
+      box-shadow: 0 18px 40px rgba(40,30,20,.18);
+      position: relative;
+      overflow: hidden;
+    }
+    .ornament {
+      position: absolute;
+      pointer-events: none;
+      opacity: 0.85;
+    }
+    .ornament.wheat {
+      left: -6px; top: 8px; width: 54px; height: 90px;
+      background: linear-gradient(160deg, #c9a26a, #e0b87a);
+      clip-path: polygon(55% 0, 70% 18%, 62% 40%, 78% 70%, 58% 100%, 42% 72%, 48% 40%, 35% 18%);
+      opacity: 0.55;
+    }
+    .ornament.ticket {
+      right: 10px; top: 14px; width: 28px; height: 36px;
+      background: #6f9b78;
+      border-radius: 4px;
+      opacity: 0.7;
+    }
+    .brand {
+      text-align: center;
+      margin: 4px 0 14px;
+      position: relative;
+      z-index: 1;
+    }
+    .brand .mark {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 800;
+      font-size: 15px;
+      letter-spacing: 0.02em;
+    }
+    .brand .mark i {
+      width: 18px; height: 18px; border-radius: 50%;
+      background: var(--leaf);
+      display: inline-block;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      position: relative;
+      z-index: 1;
+    }
+    .sport {
+      background: linear-gradient(165deg, #f8ebe3 0%, var(--peach-card) 100%);
+      border-radius: 22px;
+      padding: 12px 10px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-height: 0;
+      aspect-ratio: 1 / 1.02;
+    }
+    .sport .head {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+    .sport .head h2 {
+      margin: 0;
+      font-family: Fraunces, serif;
+      font-size: 20px;
+      font-weight: 700;
+    }
+    .today {
+      display: grid;
+      grid-template-columns: 1fr 56px;
+      gap: 6px;
+      align-items: center;
+      padding: 8px 8px;
+      border-radius: 14px;
+      background: rgba(255,255,255,.42);
+      border: 1px solid rgba(255,255,255,.5);
+      flex: 1;
+      min-height: 0;
+    }
+    .today .kicker {
+      margin: 0 0 2px;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--coral);
+    }
+    .today .name {
+      margin: 0;
+      font-family: Fraunces, serif;
+      font-size: 22px;
+      font-weight: 700;
+      line-height: 1.05;
+    }
+    .today .dose {
+      margin: 2px 0 0;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    .art-well {
+      width: 56px;
+      height: 56px;
+      border-radius: 12px;
+      background: var(--well);
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+    }
+    .art-well img {
+      width: 88%;
+      height: 88%;
+      object-fit: contain;
+    }
+    .progress { display: grid; gap: 4px; }
+    .progress .row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .progress .row span:last-child {
+      font-weight: 600;
+      color: var(--muted);
+      font-size: 10px;
+    }
+    .bar {
+      height: 7px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.7);
+      overflow: hidden;
+    }
+    .bar i {
+      display: block;
+      width: 40%;
+      height: 100%;
+      background: var(--coral);
+      border-radius: inherit;
+    }
+    .cta-sport {
+      display: block;
+      width: 100%;
+      border: 0;
+      border-radius: 999px;
+      padding: 9px 10px;
+      background: var(--coral);
+      color: #fff;
+      font: inherit;
+      font-weight: 700;
+      font-size: 13px;
+      text-align: center;
+    }
+    .express-wrap {
+      border-radius: 22px;
+      overflow: hidden;
+      background: var(--sage);
+      aspect-ratio: 1 / 1.02;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.35);
+    }
+    .express-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center top;
+      display: block;
+    }
+    .month {
+      margin-top: 10px;
+      border-radius: 22px;
+      overflow: hidden;
+      background: #fff;
+      position: relative;
+      z-index: 1;
+      box-shadow: 0 8px 20px rgba(40,30,20,.08);
+    }
+    .month img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <main class="phone" id="phone">
+    <div class="ornament wheat" aria-hidden="true"></div>
+    <div class="ornament ticket" aria-hidden="true"></div>
+    <div class="brand"><span class="mark"><i></i> СільпоSE</span></div>
+
+    <div class="grid">
+      <article class="sport" aria-label="Спорт">
+        <header class="head">
+          <svg width="40" height="40" viewBox="0 0 64 64" aria-hidden="true">
+            <defs>
+              <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#f08a6a"/>
+                <stop offset="100%" stop-color="#d4553a"/>
+              </linearGradient>
+            </defs>
+            <rect x="8" y="22" width="10" height="20" rx="3" fill="url(#g)"/>
+            <rect x="46" y="22" width="10" height="20" rx="3" fill="url(#g)"/>
+            <rect x="16" y="28" width="32" height="8" rx="3" fill="url(#g)"/>
+          </svg>
+          <h2>Спорт</h2>
+        </header>
+        <section class="today">
+          <div>
+            <p class="kicker">Сьогодні</p>
+            <p class="name">Планка</p>
+            <p class="dose">20 с × 3 · ~12 хв</p>
+          </div>
+          <div class="art-well">
+            <img src="./sport-square/plank-guide-frame-1.png" alt="Планка" width="512" height="512" />
+          </div>
+        </section>
+        <div class="progress">
+          <div class="row"><span>2/5 занять</span><span>лишилось 3</span></div>
+          <div class="bar"><i></i></div>
+        </div>
+        <button type="button" class="cta-sport">Пігнали →</button>
+      </article>
+
+      <div class="express-wrap" aria-label="Експрес">
+        <img src="./express-square/e2-m1-stack-hero.png" alt="Експрес E2-M1" />
+      </div>
+    </div>
+
+    <section class="month" aria-label="Деталі місяця">
+      <!-- cropped month body from H1 lock; full-bleed card chrome handled by white wrap -->
+      <img id="month-img" src="./month-scale-nav/h1-home-dual-axis-nav.png" alt="Деталі місяця H1" />
+    </section>
+  </main>
+</body>
+</html>

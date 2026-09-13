@@ -163,7 +163,9 @@ export function buildSportRationPlan({
     dayISO,
     cookMode: prefs?.cookMode,
   });
-  const base = sportShopQueriesFromMealMap(meals);
+  /* Day plates: strip pantry packs; week soft queries pass pantryMode: 'include' separately. */
+  const pantryMode = prefs?.pantryMode === "include" || prefs?.pantryMode === "only" ? prefs.pantryMode : "exclude";
+  const base = sportShopQueriesFromMealMap(meals, { dayISO, pantryMode });
   const filtered = filterQueriesBySurvey(base, prefs);
   const surveyActive = surveyHasActiveFilters(prefs);
   const pid = partnerId || contentPack?.id || null;
