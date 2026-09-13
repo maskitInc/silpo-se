@@ -1,12 +1,13 @@
 # Onboard → ready home (visual QA)
 
 ## Usage case
-Guest opens `#/`. Three-step soft-gate on home:
+Guest opens `#/`. Four-step soft-gate on home:
 1. **Крок 1** — Підключення до Сільпо (без connect форма профілю locked).
 2. **Крок 2** — «Хто займається?» full form → після save згортається в плашку (avatar · summary · Змінити).
-3. **Крок 3** — «Обрати програму» (фільтри рівень/категорія, «для вас») → «Далі · на головну →» → ready home.
+3. **Крок 3** — «Обрати програму» → «Далі · смаки →».
+4. **Крок 4** — «Смаки» (уникати / раціон / кухня) → «Далі · на головну» або «Пропустити без фільтрів» → ready home.
 
-Після complete onboard дані лише змінюються («Змінити» на плашці ready-home / day → combined form+каталог).
+Після complete onboard «Пігнали» → `#/day` без survey interstitial. Дані лише змінюються («Змінити» на плашці / day filter).
 
 ## Ready home · identity plate
 Who: connected + complete profile + chosen program on `#/`.
@@ -37,6 +38,7 @@ Clear `silpo.sport.programChosen.v1` (+ optional `silpo.sport.programId.v1`) wit
 | `gate-connected-incomplete.png` | Connected, CTA disabled, no back |
 | `gate-form-ready-cta.png` | Form filled → CTA enabled |
 | `step3-program-picker.png` | Крок 1 done + крок 2 plate + program list |
+| `step4-smaky.png` | Крок 4 Смаки after program |
 | `step3-list-fix.png` | Step 3: no catalog max-height / dock flush (no frosted gap) |
 | `step3-confirm-ready.png` | After confirm → ready home |
 | `ready-identity-plate.png` | Ready: plate between SE and Sport |

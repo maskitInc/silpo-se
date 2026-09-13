@@ -54,7 +54,8 @@ export function loadSportSurvey(storage = globalThis.localStorage) {
     const raw = storage?.getItem?.(SURVEY_KEY);
     if (!raw) return emptySportSurvey();
     const parsed = JSON.parse(raw);
-    return normalizeSurvey(parsed);
+    /* Раціон UI hidden — ignore persisted diet tags in the app. */
+    return { ...normalizeSurvey(parsed), dietTags: [] };
   } catch {
     return emptySportSurvey();
   }
@@ -63,6 +64,8 @@ export function loadSportSurvey(storage = globalThis.localStorage) {
 export function saveSportSurvey(prefs, storage = globalThis.localStorage) {
   const next = normalizeSurvey({
     ...prefs,
+    /* Раціон UI hidden — clear so stale tags don't silently filter. */
+    dietTags: [],
     completedAt: prefs?.completedAt || new Date().toISOString(),
   });
   try {

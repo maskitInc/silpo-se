@@ -174,7 +174,7 @@ export function fillMissingLinesFromFixture(mcpResolve, fixtureResolve) {
       unitPrice: fix.unitPrice,
       image: fix.image || line.image || "",
       amount: fix.amount || line.amount,
-      note: fix.note || "з полиці-фікстури",
+      note: fix.note || "",
       envelope: fix.envelope || line.envelope,
     };
   });

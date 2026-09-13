@@ -30,7 +30,6 @@ import {
   saveSportSurvey,
   SURVEY_AVOID_CHIPS,
   SURVEY_COOK_MODES,
-  SURVEY_DIET_TAGS,
   surveyIsComplete,
   surveySummaryLine,
   surveyTasteFilterCount,
@@ -145,6 +144,7 @@ import {
   weekStartISO,
 } from "./spend.js";
 import {
+  clearSportProgramChosen,
   confirmSportProgramChoice,
   hasChosenSportProgram,
   loadChosenSportProgramId,
@@ -297,6 +297,26 @@ function homeReadyIdentityPlateHtml(profile, programTitle) {
     </div>`;
 }
 
+/** Onboard step-3 collapsed plate (program). */
+function homeProgramStepPlateHtml(programTitle) {
+  const title = programTitle || "Програма";
+  const letter = esc(String(title).slice(0, 1));
+  return `
+    <section class="onboard-steps onboard-steps--plate" aria-label="Програма">
+      <div class="onboard-profile-plate">
+        <p class="onboard-step__kicker">Крок 3</p>
+        <button type="button" class="sport-profile__hero-band" id="editHomeProgram" aria-label="Змінити програму: ${esc(title)}">
+          <span class="sport-profile__hero-avatar" aria-hidden="true">${letter}</span>
+          <span class="sport-profile__hero-copy">
+            <span class="sport-profile__hero-line">${esc(title)}</span>
+            <span class="sport-profile__hero-kcal">обрана програма вдома</span>
+          </span>
+          <span class="sport-profile__hero-edit" aria-hidden="true">Змінити</span>
+        </button>
+      </div>
+    </section>`;
+}
+
 function currentSportProgramTitle() {
   const id =
     state.intentSport?.constraints?.programId ||
@@ -321,6 +341,14 @@ function bindSportProfileHeroBand({ programId, buttonId = "editProfile" } = {}) 
   const btn = buttonId === "editProfile" ? $("#editProfile") : document.getElementById(buttonId);
   if (!btn) return;
   btn.onclick = () => {
+    /* Onboard plates: reopen profile step without leaving home. */
+    if (state.screen === "home" && homeGatePhase() === "onboard") {
+      state.profileDraft = normalizeSportProfile(loadSportProfile());
+      state._sportProfilePolishOnce = true;
+      state._sportCombinedEdit = false;
+      render();
+      return;
+    }
     if (hasChosenSportProgram()) {
       openSportProfileProgramEdit({ programId });
       return;
@@ -329,6 +357,16 @@ function bindSportProfileHeroBand({ programId, buttonId = "editProfile" } = {}) 
     state.profileDraft = normalizeSportProfile(loadSportProfile());
     state.sportProgramPickerOpen = false;
     state._sportProfilePolishOnce = true;
+    render();
+  };
+}
+
+function bindHomeProgramPlate() {
+  const btn = $("#editHomeProgram");
+  if (!btn) return;
+  btn.onclick = () => {
+    clearSportProgramChosen();
+    state.surveyDraft = null;
     render();
   };
 }
@@ -2726,10 +2764,11 @@ function homeOnboardSubstep() {
     return "profile";
   }
   if (!hasChosenSportProgram()) return "program";
+  if (!surveyIsComplete(loadSportSurvey())) return "survey";
   return "done";
 }
 
-/** Home soft-gate: onboard (connect → profile → program) → ready session card. */
+/** Home soft-gate: onboard (connect → profile → program → смаки) → ready session card. */
 function homeGatePhase() {
   return homeOnboardSubstep() === "done" ? "ready" : "onboard";
 }
@@ -2856,19 +2895,93 @@ function homeOnboardHeroHtml() {
     </figure>`;
 }
 
+function sportSurveyChipsHtml(draft) {
+  const avoidHtml = SURVEY_AVOID_CHIPS.map((c) => {
+    const on = draft.avoidIds.includes(c.id);
+    return `<button type="button" class="survey-chip survey-chip--check${on ? " is-on" : ""}" data-avoid="${esc(c.id)}" role="checkbox" aria-checked="${on ? "true" : "false"}">${esc(c.label)}</button>`;
+  }).join("");
+  const cookHtml = SURVEY_COOK_MODES.map((c) => {
+    const on = draft.cookMode === c.id;
+    return `<button type="button" class="survey-chip survey-chip--radio${on ? " is-on" : ""}" data-cook="${esc(c.id)}" role="radio" aria-checked="${on ? "true" : "false"}">${esc(c.label)}</button>`;
+  }).join("");
+  return { avoidHtml, cookHtml };
+}
+
+function sportSurveyBodyHtml(draft, programTitle) {
+  const { avoidHtml, cookHtml } = sportSurveyChipsHtml(draft);
+  return `
+        <p class="day-flow__lede muted">Під «${esc(programTitle || "Sport")}» познач, чого уникати на полиці, і як тобі зручніше готувати. Це просто твої вподобання.</p>
+        <section class="day-sheet survey-sheet survey-sheet--multi" aria-label="Уникати">
+          <div class="survey-sheet__head">
+            <strong class="day-sheet__label">Уникати</strong>
+            <span class="survey-sheet__mode">чеки · можна кілька</span>
+          </div>
+          <div class="survey-chips" role="group" aria-label="Уникати продукти, можна кілька">${avoidHtml}</div>
+        </section>
+        <section class="day-sheet survey-sheet survey-sheet--single" aria-label="На кухні">
+          <div class="survey-sheet__head">
+            <strong class="day-sheet__label">На кухні</strong>
+            <span class="survey-sheet__mode">вибір · лише один</span>
+          </div>
+          <div class="survey-chips survey-chips--radio" role="radiogroup" aria-label="Спосіб на кухні, один варіант">${cookHtml}</div>
+          <p class="muted survey-hint">«Готувати самому» тягне сирі SKU; «готове з полиці» — готові. Не плутати з міткою «плита» на страві дня.</p>
+        </section>`;
+}
+
+/**
+ * @param {{ onDone: () => void, onBack?: () => void, nextLabel?: string, busyLabel?: string }} opts
+ */
+function bindSportSurveyForm(opts) {
+  const onDone = opts.onDone;
+  const onBack = opts.onBack;
+  const nextLabel = opts.nextLabel || "Далі · на головну →";
+  const busyLabel = opts.busyLabel || "Зберігаємо…";
+  const back = $("#back");
+  if (back && onBack) back.onclick = () => onBack();
+  root.querySelectorAll("[data-avoid]").forEach((btn) => {
+    btn.onclick = () => {
+      const id = btn.dataset.avoid;
+      const set = new Set(state.surveyDraft.avoidIds);
+      if (set.has(id)) set.delete(id);
+      else set.add(id);
+      state.surveyDraft = { ...state.surveyDraft, avoidIds: [...set] };
+      render();
+    };
+  });
+  root.querySelectorAll("[data-cook]").forEach((btn) => {
+    btn.onclick = () => {
+      state.surveyDraft = { ...state.surveyDraft, cookMode: btn.dataset.cook };
+      render();
+    };
+  });
+  const next = $("#surveyNext");
+  if (next) {
+    next.textContent = nextLabel;
+    next.onclick = () => {
+      if (next.dataset.busy === "1") return;
+      setConfirmBusy(next, true, busyLabel);
+      saveSportSurvey({ ...state.surveyDraft, dietTags: [] });
+      state.surveyDraft = null;
+      onDone();
+    };
+  }
+}
+
 function homeConnectStepHtml({ hasToken, staticHost }) {
   const chip = homeSilpoChipHtml({ hasToken, staticHost, connectCta: "Підключитися" });
   const connected = hasToken || staticHost;
   return `
-    <section class="onboard-steps" aria-label="Підключення">
-      <article class="onboard-step${connected ? " is-done" : " is-active"}">
-        <div class="onboard-step__copy">
-          <p class="onboard-step__kicker">Крок 1</p>
-          <h2 class="onboard-step__title">Підключення до Сільпо</h2>
-          <p class="onboard-step__lede muted">Щоб бачити чеки й полицю з твого акаунту — офіційний сервіс Сільпо.</p>
-        </div>
-        <div class="onboard-step__action">${chip}</div>
-      </article>
+    <section class="onboard-steps onboard-steps--plate" aria-label="Підключення">
+      <div class="onboard-profile-plate">
+        <p class="onboard-step__kicker">Крок 1</p>
+        <article class="onboard-step${connected ? " is-done" : " is-active"}">
+          <div class="onboard-step__copy">
+            <h2 class="onboard-step__title">Підключення до Сільпо</h2>
+            <p class="onboard-step__lede muted">Щоб бачити чеки й полицю з твого акаунту — офіційний сервіс Сільпо.</p>
+          </div>
+          <div class="onboard-step__action">${chip}</div>
+        </article>
+      </div>
     </section>`;
 }
 
@@ -3493,6 +3606,53 @@ async function render() {
         staticHost: connectedUi && staticHost,
       });
 
+      if (sub === "survey") {
+        ensureHomeSportProgram();
+        const programTitle = currentSportProgramTitle();
+        const draft = state.surveyDraft || normalizeSurvey(loadSportSurvey());
+        state.surveyDraft = draft;
+        paint(
+          `
+      <section class="home-hero home-hero--onboard home-hero--onboard-survey" aria-label="Старт СільпоSE · смаки">
+        <div class="home-hero__wash" aria-hidden="true"></div>
+        <header class="home-nav">
+          <div class="home-nav__brand-block">
+            ${brandMarkHtml({ product: "sportExpress", size: "hero", tag: "span", className: "home-nav__brand" })}
+            <span class="home-nav__whisper">крок 4 · смаки</span>
+          </div>
+        </header>
+        ${connectHtml}
+        ${homeProfileStepPlateHtml(savedProfile)}
+        ${homeProgramStepPlateHtml(programTitle)}
+        <h1 class="day-flow__title sport-pick__hero onboard-profile__title">Смаки</h1>
+        ${sportSurveyBodyHtml(draft, programTitle)}
+        <div class="dock dock--sport dock--survey">
+          <button type="button" class="primary" id="surveyNext">Далі · на головну →</button>
+        </div>
+        <details class="jury home-jury">
+          <summary>для журі · ds625</summary>
+          <p class="muted">Крок 4 — смаки/фільтр полиці. Далі «Пігнали» відкриває день без додаткових форм.</p>
+          <label class="muted"><input type="checkbox" id="dbg" ${state.debug ? "checked" : ""}/> показати debug</label>
+        </details>
+      </section>`,
+          () => {
+            bindHomeCommonChrome({ hasToken });
+            bindSportProfileHeroBand();
+            bindHomeProgramPlate();
+            bindSportSurveyForm({
+              nextLabel: "Далі · на головну →",
+              busyLabel: "Зберігаємо…",
+              onDone: () => {
+                toast("Смаки збережено");
+                invalidateDayVmCache();
+                render();
+              },
+            });
+          },
+        );
+        return;
+      }
+
       if (sub === "program") {
         ensureHomeSportProgram();
         const picker = sportProgramPickerModel(savedProfile);
@@ -3505,19 +3665,18 @@ async function render() {
             ${brandMarkHtml({ product: "sportExpress", size: "hero", tag: "span", className: "home-nav__brand" })}
             <span class="home-nav__whisper">крок 3 · обрати програму</span>
           </div>
-          ${sessionChip}
         </header>
         ${connectHtml}
         ${homeProfileStepPlateHtml(savedProfile)}
         <section class="sport-pick sport-pick--collapsed sport-pick--picker-forward sport-pick--onboard" aria-label="Обрати програму">
           ${sportProgramPickerBlockHtml(picker)}
           <div class="dock dock--sport">
-            <button type="button" class="primary" id="confirmProgram">Далі · на головну →</button>
+            <button type="button" class="primary" id="confirmProgram">Далі · смаки →</button>
           </div>
         </section>
         <details class="jury home-jury">
-          <summary>для журі · ds200</summary>
-          <p class="muted">Крок 3 — програма вдома. «Змінити» на плашці кроку 2 повертає до профілю.</p>
+          <summary>для журі · ds625</summary>
+          <p class="muted">Крок 3 — програма вдома. Далі — крок 4 · смаки.</p>
           <label class="muted"><input type="checkbox" id="dbg" ${state.debug ? "checked" : ""}/> показати debug</label>
         </details>
       </section>`,
@@ -3566,7 +3725,6 @@ async function render() {
             ${brandMarkHtml({ product: "sportExpress", size: "hero", tag: "span", className: "home-nav__brand" })}
             <span class="home-nav__whisper">${whisper}</span>
           </div>
-          ${sessionChip}
         </header>
         ${homeOnboardHeroHtml()}
         ${connectHtml}
@@ -3581,7 +3739,7 @@ async function render() {
           <button type="button" class="primary" id="saveProfile" data-ready-label="Далі · програма →"${canSave ? "" : " disabled aria-disabled=\"true\""} title="${esc(saveLabel)}">${esc(saveLabel)}</button>
         </div>
         <details class="jury home-jury">
-          <summary>для журі · ds200</summary>
+          <summary>для журі · ds625</summary>
           <p class="muted">Підключення — офіційний вхід Сільпо. Форма активна лише після підключення; далі — крок 3 · програма.</p>
           <label class="muted"><input type="checkbox" id="dbg" ${state.debug ? "checked" : ""}/> показати debug</label>
         </details>
@@ -3669,7 +3827,7 @@ async function render() {
         ${homePulseHtml(hasToken)}
         ${homeBaseChipHtml()}
         <details class="jury home-jury">
-          <summary>для журі · ds200</summary>
+          <summary>для журі · ds625</summary>
           <p class="muted">Без входу — демо-чеки. Після входу токен на сервері; pulse тягне /api/history.</p>
           ${
             hasToken
@@ -8373,18 +8531,6 @@ async function renderSport(seq) {
     const program =
       state.kb?.programs?.find((p) => p.id === state.intentSport?.constraints?.programId) ||
       state.kb?.programs?.[0];
-    const avoidHtml = SURVEY_AVOID_CHIPS.map((c) => {
-      const on = draft.avoidIds.includes(c.id);
-      return `<button type="button" class="survey-chip survey-chip--check${on ? " is-on" : ""}" data-avoid="${esc(c.id)}" role="checkbox" aria-checked="${on ? "true" : "false"}">${esc(c.label)}</button>`;
-    }).join("");
-    const dietHtml = SURVEY_DIET_TAGS.map((c) => {
-      const on = draft.dietTags.includes(c.id);
-      return `<button type="button" class="survey-chip survey-chip--check${on ? " is-on" : ""}" data-diet="${esc(c.id)}" role="checkbox" aria-checked="${on ? "true" : "false"}">${esc(c.label)}</button>`;
-    }).join("");
-    const cookHtml = SURVEY_COOK_MODES.map((c) => {
-      const on = draft.cookMode === c.id;
-      return `<button type="button" class="survey-chip survey-chip--radio${on ? " is-on" : ""}" data-cook="${esc(c.id)}" role="radio" aria-checked="${on ? "true" : "false"}">${esc(c.label)}</button>`;
-    }).join("");
     paint(
       `
       <section class="day-flow survey-flow" aria-label="Смаки раціону">
@@ -8393,85 +8539,25 @@ async function renderSport(seq) {
             <button type="button" class="back" id="back" aria-label="Назад">←</button>
             <h1 class="sport-title">Смаки</h1>
           </div>
-          <p class="day-flow__kicker sport-chrome__kicker">фільтр полиці · не медична порада</p>
+          <p class="day-flow__kicker sport-chrome__kicker">фільтр полиці · твої вподобання</p>
         </header>
-        <p class="day-flow__lede muted">Під програму «${esc(program?.title || "Sport")}» — прибрати продукти, режим раціону й спосіб на кухні. Це ваш вибір, не діагноз.</p>
-        <section class="day-sheet survey-sheet survey-sheet--multi" aria-label="Уникати">
-          <div class="survey-sheet__head">
-            <strong class="day-sheet__label">Уникати</strong>
-            <span class="survey-sheet__mode">чеки · можна кілька</span>
-          </div>
-          <div class="survey-chips" role="group" aria-label="Уникати продукти, можна кілька">${avoidHtml}</div>
-        </section>
-        <section class="day-sheet survey-sheet survey-sheet--multi" aria-label="Раціон">
-          <div class="survey-sheet__head">
-            <strong class="day-sheet__label">Раціон</strong>
-            <span class="survey-sheet__mode">чек · режим харчування</span>
-          </div>
-          <p class="survey-section-hint muted">Окремо від «уникати»: ширший режим (напр. без мʼяса / риби).</p>
-          <div class="survey-chips" role="group" aria-label="Режим раціону, можна увімкнути">${dietHtml}</div>
-        </section>
-        <section class="day-sheet survey-sheet survey-sheet--single" aria-label="На кухні">
-          <div class="survey-sheet__head">
-            <strong class="day-sheet__label">На кухні</strong>
-            <span class="survey-sheet__mode">вибір · лише один</span>
-          </div>
-          <div class="survey-chips survey-chips--radio" role="radiogroup" aria-label="Спосіб на кухні, один варіант">${cookHtml}</div>
-          <p class="muted survey-hint">«Готувати самому» тягне сирі SKU; «готове з полиці» — готові. Не плутати з міткою «плита» на страві дня.</p>
-        </section>
+        ${sportSurveyBodyHtml(draft, program?.title)}
         <button type="button" class="primary" id="surveyNext">Далі · день і полиця →</button>
-        <button type="button" class="ghost ghost--sheet survey-skip" id="surveySkip">Пропустити без фільтрів</button>
       </section>
     `,
       () => {
-        $("#back").onclick = () => go("sport");
-        root.querySelectorAll("[data-avoid]").forEach((btn) => {
-          btn.onclick = () => {
-            const id = btn.dataset.avoid;
-            const set = new Set(state.surveyDraft.avoidIds);
-            if (set.has(id)) set.delete(id);
-            else set.add(id);
-            state.surveyDraft = { ...state.surveyDraft, avoidIds: [...set] };
+        bindSportSurveyForm({
+          nextLabel: "Далі · день і полиця →",
+          busyLabel: "Збираємо день…",
+          onBack: () => go("sport"),
+          onDone: () => {
+            state.screen = "day";
+            state.navLock = true;
+            invalidateDayVmCache();
+            writeHash();
             render();
-          };
+          },
         });
-        root.querySelectorAll("[data-diet]").forEach((btn) => {
-          btn.onclick = () => {
-            const id = btn.dataset.diet;
-            const set = new Set(state.surveyDraft.dietTags);
-            if (set.has(id)) set.delete(id);
-            else set.add(id);
-            state.surveyDraft = { ...state.surveyDraft, dietTags: [...set] };
-            render();
-          };
-        });
-        root.querySelectorAll("[data-cook]").forEach((btn) => {
-          btn.onclick = () => {
-            state.surveyDraft = { ...state.surveyDraft, cookMode: btn.dataset.cook };
-            render();
-          };
-        });
-        $("#surveyNext").onclick = () => {
-          const btn = $("#surveyNext");
-          if (btn?.dataset.busy === "1") return;
-          setConfirmBusy(btn, true, "Збираємо день…");
-          saveSportSurvey(state.surveyDraft);
-          state.surveyDraft = null;
-          state.screen = "day";
-          state.navLock = true;
-          invalidateDayVmCache();
-          writeHash();
-          render();
-        };
-        $("#surveySkip").onclick = () => {
-          saveSportSurvey({ ...emptySportSurvey(), completedAt: new Date().toISOString() });
-          state.surveyDraft = null;
-          state.screen = "day";
-          state.navLock = true;
-          invalidateDayVmCache();
-          writeHash();
-          render();
-        };
       },
     );
     return;
@@ -8692,7 +8778,7 @@ async function renderSport(seq) {
       ${sourceBadge()}
       <section class="day-sheet session-player session-player--guide session-player--hero${sessionDoneToday ? " is-complete" : ""}" aria-label="Сесія">
         <div class="session-player__top session-player__top--hero">
-          <span class="session-player__meta-line muted">Сесія · ≈ ${sessionMin} хв · ≈ ${sessionBurn} ккал · ${sessionSteps.length} кр.</span>
+          <span class="session-player__meta-line muted">Сесія · ≈ ${sessionMin} хв · ≈ ${sessionBurn} ккал · ${sessionSteps.length} кроків</span>
           <button type="button" class="day-flow__program day-flow__program--meta" id="toWheel" aria-label="Змінити програму: ${esc(vm.title)}">
             <span class="day-flow__program-hint">змінити програму</span>
           </button>
@@ -9923,23 +10009,24 @@ function paintShop(i, vm, loading, opts = {}) {
       ? `<div class="shop-progress__meta-orange shop-progress__meta-orange--cluster" aria-label="Перевірка, місяць, історія">${assistInlineHtml}${whisperBlock}</div>`
       : "";
   const controlsHtml = `<div class="shop-controls shop-controls--compact shop-controls--wallet shop-controls--receipt-stamps" role="group" aria-label="Горизонт і стеля">
-        <label class="shop-controls__hz shop-controls__hz--pick shop-controls__stamp">
-          <span class="sr-only">Горизонт</span>
-          <span class="shop-controls__bracket" aria-hidden="true">[</span>
-          <select id="hz" class="shop-controls__pick" aria-label="Горизонт списку">
-            <option value="day"${hz === "day" ? " selected" : ""}>день</option>
-            <option value="week"${hz === "week" ? " selected" : ""}>тиждень</option>
-            <option value="month"${hz === "month" ? " selected" : ""}>місяць</option>
-          </select>
-          <span class="shop-controls__bracket" aria-hidden="true">]</span>
-        </label>
+        <span class="shop-controls__ceiling-label" id="ceilingLabel">Вкажіть стелю</span>
         <label class="shop-controls__bud shop-controls__bud--suffix shop-controls__stamp">
           <span class="sr-only">Стеля бюджету</span>
           <span class="shop-controls__bracket" aria-hidden="true">[</span>
           <span class="shop-controls__bud-field">
-            <input id="bud" type="number" inputmode="numeric" min="300" max="8000" step="50" value="${budVal}" aria-label="Стеля бюджету, гривні" />
-            <span class="shop-controls__bud-suffix" aria-hidden="true">grn</span>
+            <input id="bud" type="number" inputmode="numeric" min="300" max="8000" step="50" value="${budVal}" aria-labelledby="ceilingLabel" aria-label="Стеля бюджету, гривні" />
+            <span class="shop-controls__bud-suffix" aria-hidden="true">грн</span>
           </span>
+          <span class="shop-controls__bracket" aria-hidden="true">]</span>
+        </label>
+        <label class="shop-controls__hz shop-controls__hz--pick shop-controls__stamp">
+          <span class="sr-only">Горизонт</span>
+          <span class="shop-controls__bracket" aria-hidden="true">[</span>
+          <select id="hz" class="shop-controls__pick" aria-label="Горизонт списку" aria-labelledby="ceilingLabel">
+            <option value="day"${hz === "day" ? " selected" : ""}>день</option>
+            <option value="week"${hz === "week" ? " selected" : ""}>тиждень</option>
+            <option value="month"${hz === "month" ? " selected" : ""}>місяць</option>
+          </select>
           <span class="shop-controls__bracket" aria-hidden="true">]</span>
         </label>
       </div>`;
@@ -11677,7 +11764,8 @@ function dayMealsHtml(meals, { dayISO = currentDayISO() } = {}) {
             <div class="meal__price num">—</div>
             <button type="button" class="meal__add meal__add--search" data-meal-search="${i}">Знайти</button>`;
     }
-    const softNote = String(l.note || "").trim();
+    const softNoteRaw = String(l.note || "").trim();
+    const softNote = softNoteRaw === "з полиці-фікстури" ? "" : softNoteRaw;
     const softStock = softFlags[i];
     const showRowNote = softNote && (!softStock || (!allSoft && i === firstSoft));
     const noteHtml = showRowNote

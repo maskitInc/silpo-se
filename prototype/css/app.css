@@ -44,6 +44,13 @@
   --display: "Fraunces", "Cormorant Garamond", "Iowan Old Style", serif;
   --display-cyr: "Marck Script", "Cormorant Garamond", "Times New Roman", cursive;
   --font-receipt: "IBM Plex Mono", "PT Mono", "Roboto Mono", ui-monospace, monospace;
+  /* Shared mint wash for completed onboard steps (connect + profile/program plates) */
+  --onboard-done-bg: linear-gradient(
+    135deg,
+    color-mix(in oklch, var(--leaf) 22%, white),
+    color-mix(in oklch, var(--leaf) 12%, white)
+  );
+  --onboard-done-border: color-mix(in oklch, var(--leaf) 28%, white);
   font-family: var(--font);
   font-feature-settings: "ss01";
 }
@@ -342,7 +349,9 @@ img { max-width: 100%; }
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--leaf) 12%, transparent);
 }
 .onboard-step.is-done {
-  background: color-mix(in srgb, var(--leaf) 8%, white);
+  background: var(--onboard-done-bg);
+  border-color: var(--onboard-done-border);
+  box-shadow: 0 1px 0 oklch(1 0 0 / 0.55);
 }
 .onboard-step.is-wait {
   opacity: 0.62;
@@ -385,6 +394,11 @@ img { max-width: 100%; }
 .onboard-profile-plate .onboard-step__kicker {
   margin: 0 6px;
 }
+.onboard-profile-plate .onboard-step {
+  width: 100%;
+  margin: 0;
+  box-sizing: border-box;
+}
 .onboard-profile-plate .sport-profile__hero-band {
   width: 100%;
   margin: 0;
@@ -421,6 +435,13 @@ img { max-width: 100%; }
   background: transparent;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
+}
+.home-hero--onboard-survey .dock--survey {
+  display: grid;
+  gap: 8px;
+}
+.home-hero--onboard-survey .survey-skip {
+  min-height: 44px;
 }
 .home-hero--onboard-program {
   flex: 1 1 auto;
@@ -4830,13 +4851,9 @@ span.home-pulse__delta-chip {
   width: calc(100% - 8px);
   margin: 0 4px 10px;
   padding: 12px 14px;
-  border: 1px solid color-mix(in oklch, var(--sport, var(--leaf)) 28%, white);
+  border: 1px solid var(--onboard-done-border);
   border-radius: 20px;
-  background: linear-gradient(
-    135deg,
-    color-mix(in oklch, var(--sport, var(--leaf)) 22%, white),
-    color-mix(in oklch, var(--sport, var(--leaf)) 12%, white)
-  );
+  background: var(--onboard-done-bg);
   box-shadow: 0 1px 0 oklch(1 0 0 / 0.55);
   text-align: left;
   cursor: pointer;
@@ -7117,6 +7134,22 @@ span.home-pulse__delta-chip {
 .day-flow--ds474 .day-sheet--walk::before {
   opacity: 0.45;
 }
+/* ds624 — walk/plates paper: white + hairline gray */
+.day-flow.day-flow--ds474 .day-sheet--walk,
+.day-flow.day-flow--ds474 .day-sheet--plates {
+  background: var(--elev);
+  border: 1px solid var(--line);
+  box-shadow: none;
+}
+.day-flow.day-flow--ds474 .day-sheet--walk::before,
+.day-flow.day-flow--ds474 .day-sheet--plates::before {
+  content: none;
+  display: none;
+}
+.day-flow.day-flow--ds474 .day-walk__route {
+  background: var(--elev);
+  border-color: var(--line);
+}
 .day-walk__top {
   display: flex;
   align-items: baseline;
@@ -8452,6 +8485,22 @@ span.home-pulse__delta-chip {
   border: 1px solid color-mix(in oklch, var(--line) 75%, var(--leaf));
   box-shadow: none;
   animation: none;
+}
+/* ds624 — session card: same plain paper as walk/plates */
+.day-flow.day-flow--ds474 .session-player.session-player--guide,
+.day-flow.day-flow--ds474 .session-player.session-player--guide.is-live,
+.day-flow.day-flow--ds474 .session-player.session-player--guide.is-resting,
+.day-flow.day-flow--ds474 .session-player.session-player--guide.is-complete {
+  background: var(--elev);
+  border: 1px solid var(--line);
+  box-shadow: none;
+}
+.day-flow.day-flow--ds474 .session-player.session-player--guide::before,
+.day-flow.day-flow--ds474 .session-player.session-player--guide.is-live::before,
+.day-flow.day-flow--ds474 .session-player.session-player--guide.is-resting::before,
+.day-flow.day-flow--ds474 .session-player.session-player--guide.is-complete::before {
+  content: none;
+  display: none;
 }
 .session-player--guide .session-player__top {
   margin-bottom: 2px;
@@ -12528,8 +12577,20 @@ span.home-pulse__delta-chip {
   background: transparent;
   box-shadow: none;
   justify-content: flex-start;
+  align-items: center;
   gap: 8px;
   flex-wrap: nowrap;
+}
+.shop-controls__ceiling-label {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  color: color-mix(in oklch, var(--ink) 68%, transparent);
+  white-space: nowrap;
 }
 .shop-chrome__actions {
   margin-left: auto;
@@ -13253,6 +13314,14 @@ a.dock-cta:visited {
   font-weight: 700;
   color: var(--receipt-ink);
   line-height: 1;
+}
+.shop-progress--receipt .shop-controls--wallet .shop-controls__ceiling-label {
+  font-family: var(--font-receipt);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  color: var(--receipt-ink);
+  text-transform: none;
 }
 .shop-progress--receipt .shop-controls--wallet .shop-controls__hz select,
 .shop-progress--receipt .shop-controls--wallet .shop-controls__bud input {

@@ -2773,7 +2773,6 @@ if (productImage({}) !== "") throw new Error("productImage empty");
     !/shop-progress--hero/.test(strip) ||
     !/shop-progress--premium/.test(strip) ||
     !/shop-progress--receipt/.test(strip) ||
-    !/shop-progress__ticket-head/.test(strip) ||
     !/shop-progress__money-zone/.test(strip) ||
     !/shop-progress__wallet-card/.test(strip) ||
     !/shop-progress__accept-inline/.test(strip) ||

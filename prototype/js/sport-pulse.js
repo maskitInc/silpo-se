@@ -152,6 +152,15 @@ export function confirmSportProgramChoice(programId, storage = globalThis.localS
   return id;
 }
 
+/** Drop chosen flag (keep id) so home onboard can reopen program step. */
+export function clearSportProgramChosen(storage = globalThis.localStorage) {
+  try {
+    storage?.removeItem?.(PROGRAM_CHOSEN_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 /**
  * Home strip CTA — never expose wheel UI jargon.
  * @returns {{ go: "day" | "sport", label: string }}

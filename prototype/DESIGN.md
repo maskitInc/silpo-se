@@ -81,6 +81,8 @@ Skip link. `:focus-visible` ring on `--leaf`. Icon buttons `aria-label`. Dialogs
 
 | Date | Decision | Rationale |
 | --- | --- | --- |
+| 2026-09-13 | Day stack plain paper ds624 | Session/walk/plates: `--elev` + `--line` only; kill leaf tint + radial wash on day-flow cards. |
+| 2026-09-13 | Onboard done wash + ds622 | Shared `--onboard-done-bg` for connect `is-done` + profile/program plates; canonical `?v=ds622` + jury labels. |
 | 2026-08-19 | Paper + Fraunces + leaf | First design lock |
 | 2026-08-19 | Sheets + view transitions + token layers | Second pass: production density, Dribbble grocery patterns without Inter/slop |
 | 2026-08-20 | Add = full-step; Replace = sheet | Owner: «+ додати» is a next step, not a popup. VT on `go()` already caused ghost home/sport. See `research/add-flow/S36-design-lock.md`. |

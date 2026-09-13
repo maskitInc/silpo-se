@@ -268,7 +268,6 @@ export function shopProgressStripHtml(opts = {}) {
         <div class="shop-progress__hero">
           <div class="shop-progress__hero-main">
             <div class="shop-progress__receipt-sum-head">
-              <span class="shop-progress__ticket-head">ЧЕК · <span class="num">${opts.okCount}/${totalLabel}</span> поз.</span>
               ${controlsHtml}
               <span class="shop-progress__inline-sum num">${sumWithUah}</span>
               <div class="shop-progress__ticket-rule shop-progress__ticket-rule--dash" aria-hidden="true">- - - - - - - - - - - -</div>
